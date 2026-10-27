@@ -1,0 +1,19 @@
+﻿# 系统/编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.vscode/
+.idea/
+
+# 本地预览
+node_modules/
+_site/
+dist/
+
+# 密钥与凭据，绝不入库
+*.pem
+*.key
+.env
+.env.*
+secrets.*
