@@ -177,7 +177,70 @@ curl.exe -I https://aliceliddell.top
 aliceliddell-top-site/
 ├── index.html      # 主页，改文字就搜 "改这里"
 ├── 404.html        # 404 页
-└── DEPLOY.md       # 本手册
+├── DEPLOY.md       # 本手册
+├── .gitignore      # 排除密钥与编辑器垃圾
+└── .gitattributes  # 统一 LF 换行
 ```
 
 直接可拖到 Cloudflare Pages / GitHub 仓库 / 服务器网站根目录，无构建步骤、无外部依赖。
+
+> 目录里没有 `CNAME`。那是 **GitHub Pages 专属**的域名声明文件，一旦存在，GitHub 会去验证
+> `aliceliddell.top` 并因为它指向 Cloudflare 而报错。本项目域名交给 Cloudflare 管，所以不保留。
+
+---
+
+## 9. GitHub 仓库工作流
+
+**仓库**：<https://github.com/AliceLdl/aliceliddell-top>（public，默认分支 `main`）
+
+### 9.1 日常改内容并发布
+
+```bash
+cd C:/Users/HUAWEI/Documents/deepseek-harness/default-workspace/aliceliddell-top-site
+
+# 改 index.html（搜 "改这里"）
+git add -A
+git commit -m "更新主页文案"
+git push
+```
+
+推上去之后，如果 Cloudflare Pages 已连接这个仓库，**它会自动重新部署**（1–2 分钟）。
+
+### 9.2 让 Cloudflare Pages 连接这个仓库（自动部署）
+
+Cloudflare → **Workers & Pages → Create → Pages → Connect to Git** → 授权 GitHub →
+选 `AliceLdl/aliceliddell-top` → 构建设置：
+
+| 项目 | 值 |
+|---|---|
+| Production branch | `main` |
+| Framework preset | `None` |
+| Build command | *（留空）* |
+| Build output directory | `/` |
+
+点 **Save and Deploy**。之后每次 `git push` 都会自动上线，不用再手动拖文件夹。
+
+### 9.3 本地预览（改完先看一眼）
+
+```bash
+cd C:/Users/HUAWEI/Documents/deepseek-harness/default-workspace/aliceliddell-top-site
+python -m http.server 8080
+# 浏览器打开 http://127.0.0.1:8080
+```
+
+### 9.4 凭据
+
+已经用 `gh auth setup-git` 把 GitHub CLI 的 token 接到 git 的 credential helper 上，
+`git push` 不再弹登录框。token 存在 Windows 凭据管理器里，不写进仓库。
+
+查看登录状态：
+```bash
+gh auth status
+```
+
+### 9.5 如果想额外开 GitHub Pages
+
+1. 在仓库根目录新建文件 `CNAME`，内容一行 `aliceliddell.top`
+2. Settings → Pages → Source 选 `main` / `/ (root)`
+3. **但它和 Cloudflare 抢同一个域名** —— 两者只能有一个负责对外服务。
+   建议只用 Cloudflare，GitHub Pages 留空不启用。
