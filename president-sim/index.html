@@ -2740,9 +2740,9 @@ const DEMO_VOTE = {
   K_ADS:     0.5,    // 广告累计投放（边际递减，只在摇摆州兑现）
   CAMP_CAP:  6.0,    // 竞选项单侧绝对上限
   NAME_NAT:  0.55,   // 知名度对全国环境项 C_NAT 的折算下限（nameRec=0 时的传导比例）
-  T_ENTH:    2.4,    // 选举日投票率乘子：热情折算系数
-  T_GROUND:  0.8,    // 选举日投票率乘子：地面组织折算系数
-  CAMP_TURNOUT: 3.0, // 选举日投票率乘子上下限（±3 个百分点）
+  T_ENTH:    2.4,    // 动员效果：热情折算系数
+  T_GROUND:  0.8,    // 动员效果：地面组织折算系数
+  CAMP_TURNOUT: 3.0, // 动员效果上下限（±3 个百分点）
   W_TYP:   0.00,     // 已取消（不再扣除本党典型立场）；保留字段以兼容旧存档，不参与计算
   BIAS:    0.0,      // 州级差距偏置（结构性残差已由隐藏变量吸收，故归零）
   SHARE_SPAN: 1.0,   // 两党差距 → 得票率
@@ -10375,7 +10375,7 @@ function runElectionDay(){
   const act = Math.abs(off) + (Object.values(gm.camp.visits||{}).reduce((a,b)=>a+b,0))*0.12 + (gm.camp.ads||0)*0.5;
   const noiseScale = act > 0.4 ? 1 : 0;
   const final = {D:0, R:0, list:[]};
-  /* 选举日投票率乘子：基本盘热情与地面组织在这里兑现（±3 个百分点），只影响当天，
+  /* 动员效果：基本盘热情与地面组织在这里兑现（±3 个百分点），只影响当天，
      不进民调——民调里看到的只是计票第 ⑥ 项的那一半效应 */
   const turnoutAdj = (typeof campTurnoutAdj === 'function') ? campTurnoutAdj() : 0;
   const turnoutMargin = turnoutAdj * (gm.myParty === 'D' ? 1 : -1);
@@ -11534,9 +11534,9 @@ const CAMP_STAT_DEFS = {
   endorseScore: { cn:'党内背书',   min:0, max:100, init:35, dec:0,
                   why:'大佬与团体的公开站台；影响初选代表票与独立选民。' },
   debateScore:  { cn:'辩论表现',   min:-5, max:5,  init:0,  dec:1,
-                  why:'最近一场辩论的净评价；每周向 0 衰减，半衰期 4 周。' },
+                  why:'最近一场辩论的表现。' },
   scandalHeat:  { cn:'丑闻热度',   min:0, max:100, init:0,  dec:0,
-                  why:'媒体还在追这条线；每周 −2 自然降温，高时放大对手攻击。' },
+                  why:'媒体的追查程度。' },
   oppoStock:    { cn:'对手弱点储备', min:0, max:10, init:0, dec:0,
                   why:'反对派研究挖到的弹药；辩论与广告可投放，用掉就没了。' }
 };
@@ -12007,7 +12007,7 @@ function campNameFactorOf(cand, party){
   const base = DEMO_VOTE.NAME_NAT || 0.55;
   return base + (1 - base) * (s.nameRec / 100);
 }
-/* 选举日投票率乘子（百分点，±CAMP_TURNOUT）：只在投票日生效，不进民调 */
+/* 动员效果（百分点，±CAMP_TURNOUT）：只在投票日生效，不进民调 */
 function campTurnoutAdj(){
   if(typeof G === 'undefined' || !G || !G.campaign) return 0;
   const ent = campStatGet('enthusiasm'), g = campStatGet('groundGame');
@@ -12092,13 +12092,21 @@ function campStatsCard(){
   if(typeof isCampaignMode === 'function' && !isCampaignMode() && !G.general) return '';
   let c;
   try{ c = ensureCamp(); }catch(e){ return ''; }
-  const _ground = Math.max(0, Math.min(100, Math.round(c.ground || 0)));
-  const baseBars = `<div class="miniStat" style="margin-bottom:8px">
+  /* 竞项合计与动员效果：先算，供顶部一行使用 */
+  let total = 0;
+  try{ total = campScoreOf(campStatsNorm(c), 1); }catch(e){}
+  const tCol = total > 0.15 ? 'var(--ok)' : (total < -0.15 ? 'var(--bad)' : 'var(--dim)');
+  const turnout = (typeof campTurnoutAdj === 'function') ? campTurnoutAdj() : 0;
+  const tuCol = turnout > 0.15 ? 'var(--ok)' : (turnout < -0.15 ? 'var(--bad)' : 'var(--dim)');
+  const mom = (c.momentum == null ? 1 : c.momentum);
+  const momCol = mom > 1.02 ? 'var(--ok)' : (mom < 0.98 ? 'var(--bad)' : 'var(--dim)');
+  const baseBars = `<div class="miniStat" style="margin-bottom:10px">
     <div><b>$${Math.round(c.funds || 0)}</b><span>竞选资金（百万）</span></div>
     <div><b>${Math.round(c.energy || 0)}</b><span>体力</span></div>
-    <div><b>${(c.momentum || 1).toFixed(2)}</b><span>势头</span></div>
-  </div>
-  `;
+    <div><b style="color:${momCol}">${mom.toFixed(2)}</b><span>势头</span></div>
+    <div><b style="color:${tCol}">${(total > 0 ? '+' : '') + total.toFixed(1)}</b><span>竞选合力</span></div>
+    <div><b style="color:${tuCol}">${(turnout > 0 ? '+' : '') + turnout.toFixed(1)}</b><span>动员效果</span></div>
+  </div>`;
   const rows = CAMP_STAT_KEYS.map(function(k){
     const d = CAMP_STAT_DEFS[k];
     const v = campStatGet(k);
@@ -12121,13 +12129,7 @@ function campStatsCard(){
       </div>
     </div>`;
   }).join('');
-  /* 竞项合计：单侧百分点（上限 ±6.0），按州竞争度再看摇摆州兑现 */
-  let total = 0;
-  try{ total = campScoreOf(campStatsNorm(c), 1); }catch(e){}
-  const tAbs = Math.abs(total);
-  const tCol = total > 0.15 ? 'var(--ok)' : (total < -0.15 ? 'var(--bad)' : 'var(--dim)');
   const capNote = (DEMO_VOTE.CAMP_CAP || 6).toFixed(1);
-  const turnout = (typeof campTurnoutAdj === 'function') ? campTurnoutAdj() : 0;
   const _idn  = (typeof campIdentityOf === 'function') ? campIdentityOf() : null;
   const _tag  = _idn ? `<span class="tag" style="margin-left:6px;border:1px solid ${_idn.col}66;background:${_idn.col}22;color:${_idn.col}">${_idn.cn}</span>` : '';
   const _nmNow = (typeof campStatCandName === 'function') ? campStatCandName() : '';
@@ -12137,14 +12139,6 @@ function campStatsCard(){
   return `<div class="card"><h3>竞选态势 ${_tag}<span class="sub" style="margin-left:6px">趋势箭头对比上周</span></h3>
     ${baseBars}
     ${rows}
-    <div class="miniStat" style="margin-top:8px">
-      <div><b style="color:${tCol}">${(total > 0 ? '+' : '') + total.toFixed(1)}</b><span>竞项合计（百分点，上限 ±${capNote}）</span></div>
-      <div><b>${(turnout > 0 ? '+' : '') + turnout.toFixed(1)}</b><span>选举日投票率乘子（±3）</span></div>
-      <div><b>${Math.round(campStatGet('oppoStock'))}</b><span>可用弹药（辩论/负面广告消耗）</span></div>
-    </div>
-    <div class="tiny" style="margin-top:6px;color:var(--dim)">
-      辩论表现每周向 0 衰减（半衰期 4 周）；丑闻热度每周 −2 自然降温，高热度会放大对手攻击效果。
-    </div>
     ${_prof}
   </div>`;
 }
@@ -16022,9 +16016,10 @@ function platformGroupSupport(){
 }
 
 /* 不表态过多 → 动员不足 */
-function platformSilentPenalty(){
+function platformSilentPenalty(preview){
   const pf = G.platform;
-  if(!pf || !pf.published) return 0;
+  if(!pf) return 0;
+  if(!pf.published && !preview) return 0;
   let silent = 0;
   for(const is of ISSUES) if(pf.issues[is.k] == null) silent++;
   if(silent <= 4) return 0;
@@ -16104,7 +16099,9 @@ function platformPane(){
     <div class="factgrid">${groups.map(g=>`<div class="factbox">
       <b style="color:${g.pct>=55?'#3fa66a':(g.pct>=45?'#d99b2b':'#c0393b')}">${g.pct}%</b>
       <span>${g.cn}</span></div>`).join('')}</div>
-    <div class="tiny" style="margin-top:8px">不表态议题：${silentCnt} 项${silentCnt>4?('，动员惩罚 −'+platformSilentPenalty().toFixed(1)+' 个百分点'):''}</div>` : '';
+    <div class="tiny" style="margin-top:8px">不表态议题：${silentCnt} 项${silentCnt>4
+      ? ('，动员惩罚 −'+Math.abs(platformSilentPenalty(true)).toFixed(1)+' 个百分点' + (pf.published?'':'（发布后生效）'))
+      : '，未超过免罚额度'}</div>` : '';
 
   return `<div class="modal"><div class="box" style="max-width:860px;position:relative">
     <button class="btn sm" style="position:absolute;top:12px;right:12px;z-index:5"
@@ -26622,7 +26619,7 @@ function marginBreakdownHTML(){
   const fmt = function(v){ return (v >= 0 ? '+' : '') + v.toFixed(2); };
   const col = function(v){ return v > 0.05 ? '#5b93e8' : (v < -0.05 ? '#e15b5d' : 'var(--dim)'); };
   return `<div class="card"><h3>当前民调的形成</h3>
-    <table class="t"><tr><th>来源</th><th style="text-align:right">贡献（百分点）</th></tr>
+    <table class="t"><tr><th>来源</th><th style="text-align:right">贡献</th></tr>
     ${rows.map(function(r){
       return `<tr><td>${r[0]}</td><td style="text-align:right;color:${col(r[1])}">${fmt(r[1])}</td></tr>`;
     }).join('')}
@@ -27708,11 +27705,6 @@ function renderSetup(){
   $('app').innerHTML = `
   <div class="setup">
     <div style="text-align:right;padding-top:10px">${(typeof schemeToggleHTML==='function')?schemeToggleHTML(true):''}</div>
-    ${(typeof hasSave==='function' && hasSave()) ? `
-      <div style="text-align:center;margin:14px 0">
-        <button class="btn gold" onclick="loadGame()">继续上次进度</button>
-        <button class="btn sm" onclick="deleteSave();render()" style="margin-left:8px">清除存档</button>
-      </div>` : ''}
     <div class="title-hero">
       <h1>美国总统模拟器</h1>
       <div class="en">THE AMERICAN PRESIDENCY · 2000 — 2032　·　${APP_VERSION}</div>
@@ -27942,7 +27934,7 @@ function campaignPane2(){
     
     <div class="row" style="margin-top:10px;gap:6px">
       ${isPrim
-        ? `<button class="btn sm primary">总统竞选地图</button>`
+        ? ''
         : `<button class="btn sm ${(UI.campMap||'pres')==='pres'?'primary':''}" onclick="UI.campMap='pres';render()">总统竞选地图</button>
            <button class="btn sm ${UI.campMap==='sen'?'primary':''}" onclick="UI.campMap='sen';render()">参议院竞选地图</button>
            <button class="btn sm ${UI.campMap==='house'?'primary':''}" onclick="UI.campMap='house';render()">众议院竞选地图</button>`}
