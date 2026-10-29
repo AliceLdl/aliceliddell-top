@@ -1,4 +1,4 @@
-# update-psim.ps1 — 一键把 AliceLdl/president-sim 的最新版本同步到 aliceliddell.top/president-sim/
+﻿# update-psim.ps1 — 一键把 AliceLdl/president-sim 的最新版本同步到 aliceliddell.top/president-sim/
 #
 # 用法：
 #   .\update-psim.ps1              # 有更新就同步；没更新直接退出
