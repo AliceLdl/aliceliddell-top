@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>总统模拟器 v0.2.1.1</title>
+<title>总统模拟器 v0.2.1.2</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -2241,7 +2241,7 @@ body[data-era="rc"][data-scheme="dark"] .setup .search{
 </head>
 <body>
 <div id="app"></div>
-<script>const APP_VERSION = 'v0.2.1.1';
+<script>const APP_VERSION = 'v0.2.1.2';
 
 /* ===== HELP_SECTIONS：游戏内「帮助」面板的静态数据表（纯数据，不含 UI） =====
    八个模块：联邦制 / 选举 / 国会 / 初选 / 政党 / 司法 / 预算 / 日历
@@ -17306,14 +17306,14 @@ function slotInfo(n){
 function exportAutoSlot(){
   try{
     const raw = localStorage.getItem(AUTO_SLOT_KEY);
-    if(!raw){ UI.slotMsg = '自动存档为空'; render(); return; }
+    if(!raw){ UI.slotMsg = '快速存档为空'; render(); return; }
     const blob = new Blob([raw], {type:'application/json'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'president-sim-autosave.json';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
-    UI.slotMsg = '已导出自动存档';
+    UI.slotMsg = '已导出快速存档';
     render();
   }catch(e){ UI.slotMsg = '导出失败：' + e.message; render(); }
 }
@@ -17411,7 +17411,7 @@ function slotsPane(){
     <div class="hd"><span class="nm">自动存档</span>
       <span class="meta">${au ? `<b>${h(au.name)}</b>　${au.y} 年 第 ${au.w} 周` : '<span class="muted">空</span>'}</span></div>
     <div class="row" style="margin-top:6px">
-      <span class="tiny" style="align-self:center">每月第一周自动写入，不可手动存入</span>
+      <span class="tiny" style="align-self:center">每月第一周自动写入，不可手动覆盖</span>
       <button class="btn sm" ${au?'':'disabled'} onclick="loadAutoSlot()">读取</button>
     </div>
   </div>`);
@@ -17428,7 +17428,7 @@ function slotsPane(){
       }catch(e){ _adesc = '<span class="muted">（无法解析）</span>'; }
     }
     rows.push(`<div class="item">
-      <div class="hd"><span class="nm">自动存档</span><span class="meta">${_adesc}</span></div>
+      <div class="hd"><span class="nm">快速存档</span><span class="meta">${_adesc}</span></div>
       <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:6px">
         <button class="btn sm" onclick="quickSaveAuto()">覆盖快存</button>
         <button class="btn sm" ${_araw?'':'disabled'} onclick="quickLoadAuto()">读取</button>
@@ -17582,7 +17582,7 @@ const AUTO_SLOT_KEY = 'dsh_autoslot';
 function quickSaveAuto(){
   try{
     localStorage.setItem(AUTO_SLOT_KEY, serializeGame());
-    log('【存档】已快存到自动槽位。', 'good');
+    log('【存档】已快存到快速存档。', 'good');
     render();
     return true;
   }catch(e){ log('【存档】快存失败：' + e.message, 'bad'); return false; }
@@ -17590,10 +17590,10 @@ function quickSaveAuto(){
 function quickLoadAuto(){
   try{
     const raw = localStorage.getItem(AUTO_SLOT_KEY);
-    if(!raw){ log('【存档】自动槽位为空。', 'bad'); render(); return false; }
-    if(!confirm('读取自动槽位？当前未保存的进度会丢失。')) return false;
+    if(!raw){ log('【存档】快速存档为空。', 'bad'); render(); return false; }
+    if(!confirm('读取快速存档？当前未保存的进度会丢失。')) return false;
     applySave(raw);
-    log('【存档】已从自动槽位读取。', 'good');
+    log('【存档】已从快速存档读取。', 'good');
     return true;
   }catch(e){ log('【存档】快读失败：' + e.message, 'bad'); render(); return false; }
 }
@@ -17601,8 +17601,8 @@ function quickLoadAuto(){
 function saveBarHTML(){
   return `<span class="savebar">
     <button class="btn sm" onclick="openSlots()" title="存档槽位（含导入导出）">存档</button>
-    <button class="btn sm" onclick="quickSaveAuto()" title="保存到自动存档槽位">快存</button>
-    <button class="btn sm" onclick="quickLoadAuto()" title="读取自动存档槽位">快读</button>
+    <button class="btn sm" onclick="quickSaveAuto()" title="保存到快速存档">快存</button>
+    <button class="btn sm" onclick="quickLoadAuto()" title="读取快速存档">快读</button>
     <button class="btn sm" onclick="UI.modal={type:'help'};render()" title="美国政治简明介绍">帮助</button>
   </span>`;
 }
