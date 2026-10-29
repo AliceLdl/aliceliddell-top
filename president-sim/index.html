@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>总统模拟器 v0.2.0</title>
+<title>总统模拟器 v0.2.1</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -2241,7 +2241,114 @@ body[data-era="rc"][data-scheme="dark"] .setup .search{
 </head>
 <body>
 <div id="app"></div>
-<script>const APP_VERSION = 'v0.2.0';
+<script>const APP_VERSION = 'v0.2.1';
+
+/* ===== HELP_SECTIONS：游戏内「帮助」面板的静态数据表（纯数据，不含 UI） =====
+   八个模块：联邦制 / 选举 / 国会 / 初选 / 政党 / 司法 / 预算 / 日历
+   约定：intro 60~120 字，每小节 d 80~160 字，tip 一句话对应到游戏机制 */
+const HELP_SECTIONS = [
+  {
+    id: 'federalism',
+    cn: '联邦制与三权分立',
+    intro: '美国实行联邦制，联邦政府与州政府各有宪法授予的权力，彼此不能单向指挥。联邦层面总统、国会、最高法院三权分立，任何一方都无法单独完成重大决策。',
+    items: [
+      { t: '联邦与州权的划分', d: '联邦政府行使宪法第一条第八款列举的权力，包括国防、外交、货币与跨州贸易；未列举的权力由各州与人民保留（第十修正案）。州拥有治安权（police power），主管教育、公共卫生、选举管理与大部分刑法，州长不受总统罢免。' },
+      { t: '国会对总统的制约', d: '国会掌握立法权与拨款权。总统签署的条约需参议院三分之二批准，重要人事任命需参议院简单多数确认。众议院可以简单多数弹劾（impeachment）总统，参议院负责审理，三分之二多数定罪后免职。' },
+      { t: '总统对国会的制约', d: '总统可否决国会法案，两院各以三分之二多数才能推翻否决。总统发布行政命令指挥联邦机构执法，每年提交预算建议与国情咨文，并可召集国会特别会议。副总统兼任参议院议长，在平票时投出决定性一票。' },
+      { t: '司法审查', d: '最高法院在 1803 年马伯里诉麦迪逊案（Marbury v. Madison）中确立司法审查（judicial review），可以宣布国会立法与总统行为违宪。法院不主动审理抽象争议，只裁决实际上诉的案件，判决对全国有效，执行依赖行政机关配合。' }
+    ],
+    tip: '每条法案都要过国会两院表决，落地后还可能被最高法院判定违宪，州政府有权拒绝配合执行。'
+  },
+  {
+    id: 'elections',
+    cn: '选举制度',
+    intro: '总统不由全国普选票直接决定，而由 538 名选举人组成的选举人团（Electoral College）选出。各州选举人票等于该州众议院席位加两名参议员，华盛顿特区另有 3 票。',
+    items: [
+      { t: '赢者通吃与两州例外', d: '除缅因（Maine）与内布拉斯加（Nebraska）外，各州实行赢者通吃（winner-take-all）：在该州得票最多的候选人拿走全部选举人票。缅因与内布拉斯加按国会选区计票，每区一票，全州普选票第一名再额外获得两票。' },
+      { t: '270 票门槛', d: '选举人团共 538 票，候选人须拿到 270 票才当选。若无人过半，众议院从得票前三名中选出总统，每州代表团只投一票；参议院选出副总统。这一程序在 1800 年与 1824 年实际发生过。' },
+      { t: '普选票与选举人票背离', d: '2000 年戈尔全国普选票领先约 54 万票，布什以 271 比 266 拿下选举人团；2016 年希拉里领先约 287 万票，特朗普以 304 比 227 获胜。加上 1824、1876、1888 年，共五次出现普选票领先者未当选。' },
+      { t: '摇摆州与资源投放', d: '由于赢者通吃，两党把广告、集会与地面动员集中在少数摇摆州（swing states），如宾夕法尼亚、密歇根、威斯康星、佐治亚、亚利桑那、内华达。安全州（safe states）几乎不投放资源，全国普选票差距因此被放大或压缩。' }
+    ],
+    tip: '每个州的选举人票按人口分配、赢者通吃，把竞选资源压在票数接近的州比追求全国普选票总量更有效。'
+  },
+  {
+    id: 'congress',
+    cn: '国会运作',
+    intro: '国会两院分工不同：众议院按人口分配席位、任期短、反应快；参议院每州平等、任期长、审议慢。任何法案必须两院通过同一文本，再交总统签署或否决。',
+    items: [
+      { t: '众议院：435 席、两年一选', d: '众议院（House of Representatives）固定 435 席，按十年一次的人口普查在各州重新分配，每州至少一席。议员任期两年，全部席位每两年改选一次，对民意波动最敏感。议长（Speaker）由多数党产生，掌握议程安排权。' },
+      { t: '参议院：100 席、六年任期', d: '参议院（Senate）共 100 席，每州固定两席，与人口无关。任期六年，每两年改选约三分之一（33 或 34 席），形成连续审议的机构。参议院独有批准条约与确认总统任命的权力，通称建议与同意（advice and consent）。' },
+      { t: '委员会与议程控制', d: '大部分立法工作在委员会（committee）完成：起草、听证、修改、表决，再由多数党领袖安排全院审议。委员会主席由多数党资深议员担任，少数党按比例获得席位并可要求传唤证人。多数党领袖决定哪些法案进入表决日程。' },
+      { t: '冗长辩论与 60 票终结', d: '参议院允许无限发言，少数派可用冗长辩论（filibuster）阻止表决。终结辩论需要 60 票（cloture，即五分之三多数）。预算调节程序（reconciliation）不受此限，只需简单多数，因此常被用于税收、医保等重大议题。' },
+      { t: '两院协商与统一文本', d: '两院通过的文本不一致时，成立协商委员会（conference committee），由两院代表谈出统一版本，再分别表决通过。近二十年更常用两院往返回传（ping-pong）：一院修改后送回另一院，直到文本完全一致，避免委员会被少数人把持。' }
+    ],
+    tip: '法案要在众议院和参议院分别过关，参议院反对派只要凑够 41 席就能用冗长辩论拖死法案。'
+  },
+  {
+    id: 'primaries',
+    cn: '初选与提名',
+    intro: '总统候选人的产生由政党内部规则决定，联邦法律并不统一规定。各州在选举年上半年举行党团会议或初选，按结果分配全国代表票，代表在提名大会上投票确定候选人。',
+    items: [
+      { t: '党团会议与直接初选', d: '党团会议（caucus）是党员在指定时间与地点公开聚集、分组表态的形式，艾奥瓦州长期采用；直接初选（primary）由州政府举办，采用无记名投票。多数州使用初选，艾奥瓦民主党自 2024 年起改为邮寄初选。' },
+      { t: '代表票分配与门槛', d: '民主党全国代表大会约有 3900 张承诺代表票，按各州初选得票比例分配（proportional），候选人须达到 15% 门槛才有票。共和党允许各州自选规则，部分州用比例制，部分州用全州赢者通吃加选区赢者通吃。' },
+      { t: '超级代表', d: '民主党另有约 740 名未承诺代表（unpledged delegates），通称超级代表（superdelegates），由国会议员、州长与全国委员会成员组成。2018 年改革后规定：首轮投票若无人过半，超级代表才可自由投票，避免党内高层压过初选结果。' },
+      { t: '提名大会与选举人投票', d: '两党在选举年夏天召开全国代表大会（national convention），各州点名投票，候选人拿到过半代表票即获提名并发表接受提名演说。大选在 11 月举行，选举人在 12 月第二个星期三之后的星期一于各州首府投票。' },
+      { t: '认证流程与就职', d: '选举人票送交国会，次年 1 月 6 日两院联席会议清点并认证（certification），由副总统主持。若有议员对某州结果提出异议，须两院各自表决同意才能否决该州选举人票。当选人于 1 月 20 日宣誓就职。' }
+    ],
+    tip: '初选按州累积代表票，拿不到过半代表就进不了提名大会决选，超级代表能在僵局时改写结果。'
+  },
+  {
+    id: 'parties',
+    cn: '政党与意识形态',
+    intro: '美国是两党制，民主党与共和党垄断总统与国会席位，第三方在全国层面几乎没有胜算。两党内部都是宽泛联盟，同一党内的意识形态差距往往大于两党的官方立场差距。',
+    items: [
+      { t: '民主党的选民联盟', d: '民主党（Democratic Party）的核心支持者包括城市居民、非裔与拉丁裔选民、亚裔、工会成员、受过高等教育的专业人士、年轻选民与无宗教归属者。其优势集中在东北部、西海岸与大城市，近年在中西部白人蓝领中明显失势。' },
+      { t: '共和党的选民联盟', d: '共和党（Republican Party）的基础是白人福音派基督徒、乡村与小城镇居民、企业主、农业与能源从业者、退伍军人与持枪权支持者。其优势在南部、中西部乡村与山地州，近年向拉丁裔男性与部分工会成员扩展。' },
+      { t: '自由派、保守派与温和派', d: '民调中长期约 25% 的美国人自认自由派（liberal）、36% 自认保守派（conservative）、35% 自认温和派（moderate）。温和派在两党初选中处于劣势，因为初选投票率低、参与者更极化，候选人往往在大选中向中间回摆。' },
+      { t: '第三方与独立候选人', d: '第三方（third party）如自由意志党、绿党受赢者通吃与选票准入（ballot access）规则限制，很难赢下任何一州。独立候选人（independent）成绩最好的是 1992 年罗斯·佩罗，全国得票约 19%，选举人票为零。' }
+    ],
+    tip: '每个选民群体有独立的议题权重，要在初选讨好本党基础盘，再在大选向温和派偏移。'
+  },
+  {
+    id: 'courts',
+    cn: '最高法院与司法',
+    intro: '联邦司法权属于最高法院与国会设立的下级法院。法官由总统提名、参议院确认，终身任职，只有弹劾才能免职。法院通过解释宪法与法律约束行政与立法。',
+    items: [
+      { t: '大法官终身制', d: '最高法院（Supreme Court）由 1 名首席大法官与 8 名大法官组成，人数由国会立法确定，1869 年以来固定为 9 人。大法官终身任职，只在自愿退休或去世时出缺，因此一次任命的影响往往持续二三十年。' },
+      { t: '提名与确认程序', d: '总统提名后，参议院司法委员会举行听证并投票，再交全院表决，只需简单多数即可确认。近年确认战高度政治化：2016 年共和党拒绝为奥巴马提名的加兰举行听证，2020 年则在选举前八天完成巴雷特的确认。' },
+      { t: '先例与推翻判例', d: '法院原则上遵循先例（stare decisis），但可在后续案件中推翻（overturn）旧判决，如 2022 年多布斯案推翻 1973 年罗诉韦德案。推翻不需要国会立法，实际取决于大法官的意识形态构成与对新宪法解释的接受度。' },
+      { t: '州法院与联邦法院分工', d: '联邦法院审理涉及联邦法律、宪法、跨州当事人与联邦政府的案件；州法院处理绝大多数刑事、家庭、合同与土地纠纷。州最高法院解释本州宪法，可以提供比联邦宪法更强的权利保护，联邦法院通常尊重其解释。' }
+    ],
+    tip: '每次大法官出缺都是长期收益最高的机会，任命错意识形态的人会把判例方向锁死几十年。'
+  },
+  {
+    id: 'budget',
+    cn: '联邦预算与政策工具',
+    intro: '总统提出预算建议，但拨款权掌握在国会手里。常用政策工具包括立法、行政命令、监管规则与人事任命，它们的速度、阻力与可逆性差别很大，决定了总统能在多大程度上绕过国会。',
+    items: [
+      { t: '拨款与财政年度', d: '联邦财政年度从 10 月 1 日开始。国会须通过 12 项拨款法案（appropriations），否则只能靠持续决议（continuing resolution）维持运转，未通过则政府部分停摆（shutdown）。总统的预算案只是建议，国会可以完全改写。' },
+      { t: '债务上限', d: '债务上限（debt ceiling）是国会为联邦债务总额设定的法定上限，触及上限后财政部无法新借债，只能挪用账户与延迟支付。提高上限需国会立法，2011 年与 2023 年的对峙都拖到最后一刻，引发评级下调与市场波动。' },
+      { t: '行政命令与联邦公报', d: '行政命令（executive order）是总统对联邦机构的书面指令，不需国会批准，但不得违反宪法与法律；它可被继任总统撤销、被国会立法推翻、被法院判定无效。命令须在联邦公报（Federal Register）公布，公众可以查阅全文。' },
+      { t: '监管规则', d: '联邦机构依据国会授权制定规则（regulation），须走公告与评论程序（notice and comment）：先在联邦公报公示草案并接受公众意见，再发布最终规则。规则具有法律效力，撤销同样要走完整程序，通常耗时数月至数年。' },
+      { t: '美联储的独立性', d: '美联储（Federal Reserve）是美国的中央银行，理事由总统提名、参议院确认，任期 14 年，主席任期 4 年。它通过公开市场操作设定联邦基金利率，法定职责是充分就业与物价稳定，日常决策不受总统指令约束。' }
+    ],
+    tip: '行政命令立刻生效但容易被下一任推翻，花钱必须国会拨款，美联储加息降息会直接改变经济与选情。'
+  },
+  {
+    id: 'calendar',
+    cn: '美国政治的关键时间点',
+    intro: '美国政治按固定日历运转：偶数年的初选与大选、每年 1 月的国情咨文、每年 10 月的新财年。掌握这张时间表，就能提前预判每一项决策的压力点与最后期限。',
+    items: [
+      { t: '选举年日历', d: '选举年 1 月艾奥瓦举行党团会议，随后是新罕布什尔初选，3 月初的超级星期二（Super Tuesday）多州同时投票。大选投票日为 11 月第一个星期一之后的星期二，即 11 月 2 日至 8 日之间；选举人在 12 月投票。' },
+      { t: '就职日', d: '总统任期在选举次年 1 月 20 日中午开始，当选人在当天宣誓就职（inauguration）。若 1 月 20 日恰为星期日，公开典礼顺延到 21 日，但权力仍在 20 日完成转移。连任者的第二个任期同样从 1 月 20 日起算。' },
+      { t: '中期选举', d: '中期选举（midterm elections）在总统任期的第二年 11 月举行，众议院 435 席全部改选，参议院改选约三分之一。执政党通常在中期选举丢席位：2018 年共和党在众议院净失约 40 席，2022 年民主党反而净增一个参议院席位。' },
+      { t: '国情咨文与预算周期', d: '总统每年 1 月在国会联席会议发表国情咨文（State of the Union），宣读立法议程与施政成绩。2 月向国会提交预算建议，10 月 1 日新财年开始，此前须完成拨款；错过期限就要靠持续决议，甚至停摆。' }
+    ],
+    tip: '整局按这套日历逐周推进：大选前一年打初选，中期选举年守国会，10 月 1 日前必须把预算谈完。'
+  }
+];
+if (typeof window !== 'undefined') window.HELP_SECTIONS = HELP_SECTIONS;
+
 const NATIONAL_DEMO_V4 = {
   2000:[.691,.121,.125,.036,.01,.017,.2811,.1707,.241,.0201,.006,.1406,.1405,.09,.17,.27,.47,.33,.42,.19,.06,.0273,.1706,.0228,.0683,.0228,.0967,.3299,.1934,.0682],
   2008:[.654,.1223,.1483,.0453,.0107,.0194,.273,.1531,.2382,.0179,.0085,.1787,.1306,.1033,.1867,.2733,.4367,.3233,.3933,.2133,.0701,.0246,.1479,.0216,.0704,.0292,.1067,.3426,.1892,.0678],
@@ -8629,8 +8736,21 @@ function driftApproval(){
     }
   }
 }
+
+/* 紧张度统一入口：升级更难、降温更容易，单次幅度封顶 */
+function tensionApply(delta){
+  if(!delta || typeof G === 'undefined' || !G) return;
+  let d = Number(delta) || 0;
+  d = (d > 0) ? d * 0.35 : d * 0.75;          // 升温衰减到 35%，降温保留 75%
+  d = Math.max(-8, Math.min(8, d));           // 单次封顶
+  G.tension = Math.max(0, Math.min(100, (G.tension || 0) + d));
+}
+
 function driftTension(){
-  G.tension = clamp(G.tension + (rnd()-0.5)*0.7 - (G.tension-25)*0.006, 0, 100);
+  // 均值回归：目标 26；高位（>60）额外加大回落力度，避免长期钉在 100
+  let t = G.tension + (rnd()-0.5)*0.6 - (G.tension - 26)*0.020;
+  if(G.tension > 60) t -= (G.tension - 60) * 0.045;
+  G.tension = clamp(t, 0, 100);
 }
 
 /* ---------- 事件 ---------- */
@@ -8752,7 +8872,7 @@ function applyFx(fx, ctx){
   /* 美联储联动：紧急议息 / 目标利率施压 */
   if(typeof econFedHandle === 'function'){ try{ econFedHandle(fx, ctx); }catch(err){} }
   if(fx.sp)   e.sp   = clamp(e.sp*(1+fx.sp/100),100,99999);
-  if(fx.tension) G.tension = clamp(G.tension+fx.tension,0,100);
+  if(fx.tension) tensionApply(fx.tension);
   if(fx.pc&&G.player) G.player.pc = clamp((G.player.pc||0)+fx.pc,-50,100);
   if(fx.rel) for(const k in fx.rel) if(G.world[k]!=null) G.world[k]=clamp(G.world[k]+fx.rel[k],-100,100);
   if(fx.corp) for(const k in fx.corp){ G.corps[k]=G.corps[k]||50; G.corps[k]=clamp(G.corps[k]+fx.corp[k],0,100); }
@@ -13498,6 +13618,18 @@ function cleanHist(t){
 function activeCrisis(id){ return (G.crises||[]).find(c=>c.id===id); }
 
 /* ---------- 行动 ---------- */
+
+/* 危机全部选项不可用时的兜底：无消耗但更差 */
+function crisisDefer(cid){
+  const c = (G.crises||[]).find(function(x){ return x.id === cid; });
+  if(!c) return;
+  if(typeof tensionApply === 'function') tensionApply(+5);
+  if(G.pres) G.pres.appr = Math.max(3, (G.pres.appr||50) - 2);
+  log('【' + (c.cn||'危机') + '】你暂缓处置，局势按自己的节奏推进。', 'bad');
+  try{ c.deferCount = (c.deferCount||0) + 1; }catch(e){}
+  render();
+}
+
 function crisisAct(crisisId, optId){
   if(typeof playerIsPresident === 'function' && !playerIsPresident()){
     if(typeof log === 'function') log('你不在其位，这届政府会自行决断。', 'bad');
@@ -13551,7 +13683,7 @@ function applyCrisisFx(c, def, o, optId){
   }
   if(!o || !o.fx){ return; }
   const fx = o.fx || {};
-  if(fx.tension) G.tension = clamp(G.tension + fx.tension, 0, 100);
+  if(fx.tension) tensionApply(fx.tension);
   if(fx.appr && G.pres) G.pres.appr = clamp(G.pres.appr + fx.appr, 3, 95);
   if(def && def.foe && G.world[def.foe]!=null){
     const d = optId==='mediate' ? 8 : (optId==='evacuate' ? 2 : (optId==='ignore' ? -2 : -12));
@@ -14666,13 +14798,24 @@ function crisisPane(){
     <div class="choices">
       ${opts.map(x=>{
         const o = x.o;
-        const blocked = o.law && !c.law;
-        return `<div class="choice" onclick="crisisAct('${c.id}','${x.k}')">
+        const noAP = (o.ap || 0) > G.ap;
+        const blocked = (o.law && !c.law) || noAP;
+        const why = (o.law && !c.law) ? '需先通过国会军事授权' : (noAP ? ('行动点不足（需 ' + (o.ap||0) + ' 点，当前 ' + G.ap + '）') : '');
+        return `<div class="choice${blocked?' blocked':''}" ${blocked?'':`onclick="crisisAct('${c.id}','${x.k}')"`}
+          style="${blocked?'opacity:.55;cursor:not-allowed':''}">
           <div class="t">${o.t}</div>
           <div class="d">${o.d}</div>
+          ${blocked?`<div class="eff" style="color:var(--bad)">${why}</div>`:''}
           <div class="eff">行动点 ${o.ap}${blocked?' · 需先通过国会军事授权':''}</div>
         </div>`;
       }).join('')}
+      ${(opts.length && opts.every(function(x){ const o=x.o; return (o.law && !c.law) || ((o.ap||0) > G.ap); }))
+        ? `<div class="choice" onclick="crisisDefer('${c.id}')">
+             <div class="t">暂缓处置（本周不行动）</div>
+             <div class="d">局势不会等人：紧张度上升，支持率下降</div>
+             <div class="eff" style="color:var(--bad)">无消耗，但后果更差</div>
+           </div>`
+        : ''}
     </div>
     <div class="row" style="margin-top:12px">
       <button class="btn sm" onclick="UI.selCrisis=null;UI.tab='world';render()">← 返回世界地图</button>
@@ -17468,6 +17611,7 @@ function saveBarHTML(){
     <button class="btn sm" onclick="openSlots()" title="存档槽位（含导入导出）">存档</button>
     <button class="btn sm" onclick="quickSaveAuto()" title="保存到自动存档槽位">快存</button>
     <button class="btn sm" onclick="quickLoadAuto()" title="读取自动存档槽位">快读</button>
+    <button class="btn sm" onclick="UI.modal={type:'help'};render()" title="美国政治简明介绍">帮助</button>
   </span>`;
 }
 
@@ -18183,7 +18327,7 @@ function applyShockFx(fx, ctx){
   if(fx.sp != null && e.sp != null) e.sp = Math.max(20, Math.round(e.sp * (1 + fx.sp/100)));
   if(fx.appr != null && G.pres) G.pres.appr = clamp(G.pres.appr + fx.appr, 3, 95);
   if(fx.div != null)   G.div = clamp((G.div || 0) + fx.div, 0, 100);
-  if(fx.tension != null) G.tension = clamp((G.tension || 0) + fx.tension, 0, 100);
+  if(fx.tension != null) tensionApply(fx.tension);
   G.gdp = e.gdp; G.unemp = e.unemp; G.infl = e.infl;
 }
 
@@ -23094,8 +23238,14 @@ function ww3Risk(){
   const cn = G.world.CN != null ? G.world.CN : 0;
   const tension = G.tension || 0;
   const bad = Math.min(ru, cn);
-  const ok = (tension >= 72) && (ru <= -65 || cn <= -55);
-  return {ok:ok, tension:tension, ru:ru, cn:cn, bad:bad};
+  // 记录持续高压周数：低于 68 即清零
+  if(tension >= 68) G._hiTensionW = (G._hiTensionW || 0) + 1;
+  else G._hiTensionW = 0;
+  // 爆发条件：紧张度长期高企 + 至少一个大国关系深跌
+  const sustained = (G._hiTensionW || 0) >= 8;
+  const deep = (ru <= -70 || cn <= -60);
+  const ok = sustained && deep && tension >= 78;
+  return {ok:ok, tension:tension, ru:ru, cn:cn, bad:bad, sustained:sustained, deep:deep};
 }
 
 function ww3Tick(){
@@ -23105,7 +23255,7 @@ function ww3Tick(){
   const r = ww3Risk();
   if(!r.ok) return;
   // 每周有小概率进入事件链
-  const p = 0.03 + (r.tension - 72) * 0.004 + Math.max(0, (-r.bad - 55)) * 0.0015;
+  const p = Math.min(0.06, 0.01 + (r.tension - 78) * 0.003 + Math.max(0, (-r.bad - 70)) * 0.0015);
   if(Math.random() > p) return;
   G.ww3 = {stage:0, risk:0, since: G.y*52 + G.w};
   log('【世界大战】局势急剧恶化，战争风险进入不可忽视的区间。', 'bad');
@@ -23195,6 +23345,10 @@ function ww3Pane(){
   const W = G.ww3;
   if(!W) return '';
   const evNode = (typeof ww3Current === 'function') ? ww3Current() : null;
+  // 数据缺失导致无选项：静默跳过该节点，不提供通用兜底按钮
+  if(evNode && (!evNode.o || !evNode.o.length) && typeof ww3Fallback === 'function'){
+    try{ ww3Fallback(); return ''; }catch(e){}
+  }
   if(evNode){
     const r0 = ww3Risk();
     return `<div class="modal"><div class="box" style="max-width:700px;border-color:#8f141c">
@@ -23206,6 +23360,7 @@ function ww3Pane(){
         <span class="tag R">对俄关系 ${Math.round(r0.ru)}</span>
         <span class="tag R">对华关系 ${Math.round(r0.cn)}</span>
       </div>
+      ${UI.ww3Msg ? `<div class="notice" style="margin:8px 0">${h(UI.ww3Msg)}</div>` : ''}
       <div class="list" style="margin-top:10px">
         ${(evNode.o||[]).map(o=>`<div class="item" style="cursor:pointer;border-left:3px solid #8f141c"
           onclick="ww3Act('${o.id}')">
@@ -23326,6 +23481,25 @@ function ww3Current(){
   }
   return def.events.find(e => e.id === W.curEvent) || null;
 }
+
+/* 无可选项时的兜底：无消耗，但后果更差 */
+function ww3Fallback(){
+  const W = G.ww3;
+  if(!W) return;
+  const ev = (typeof ww3Current === 'function') ? ww3Current() : null;
+  try{
+    if(ev && ev.id) W.choices[ev.id + ':pass'] = 1;
+    if(ev && ev.id) W.seenEv[ev.id] = 1;
+  }catch(e){}
+  if(typeof tensionApply === 'function') tensionApply(+7);
+  if(G.pres) G.pres.appr = Math.max(3, (G.pres.appr || 50) - 3);
+  if(typeof apprLog === 'function'){ try{ apprLog(-3, '在战争危机中未作决定'); }catch(e){} }
+  log('【世界大战】局势未经处理，对方按自己的节奏推进。', 'bad');
+  if(typeof ww3Next === 'function'){ try{ ww3Next(); }catch(e){} }
+  UI.modal = {type:'ww3'};
+  render();
+}
+
 function ww3Act(optId){
   const W = ww3State();
   if(!W) return;
@@ -23334,10 +23508,10 @@ function ww3Act(optId){
   if(!ev) return;
   const opt = (ev.o || []).find(o => o.id === optId) || (ev.o || [])[0];
   if(!opt) return;
-  if(G.ap < (opt.ap || 0)){ log('行动点不足。', 'bad'); return; }
-  G.ap -= (opt.ap || 0);
+  // 战争决策不消耗行动点：代价由后果承担，避免被资源卡死
+  UI.ww3Msg = '';
   const fx = opt.fx || {};
-  if(fx.tension) G.tension = clamp((G.tension||0) + fx.tension, 0, 100);
+  if(fx.tension) tensionApply(fx.tension);
   // B15：应用除 tension 之外的全部效果
   if(typeof applyCrisisFx === 'function'){
     const _rest = {};
@@ -26723,6 +26897,38 @@ function doVoteBill(){
 }
 
 /* ---------------- 弹窗 ---------------- */
+
+/* 帮助：美国政治简明介绍（内容来自 HELP_SECTIONS） */
+function helpPane(){
+  let secs = null;
+  try{ secs = window.HELP_SECTIONS || null; }catch(e){}
+  if(!secs || !secs.length){
+    return '<div class="modal"><div class="box" style="max-width:760px;position:relative">'
+      + '<button class="btn sm" style="position:absolute;top:12px;right:12px" onclick="UI.modal=null;render()">✕</button>'
+      + '<div class="kicker">HELP</div><h2>美国政治简明介绍</h2>'
+      + '<div class="muted">内容正在整理中。</div></div></div>';
+  }
+  const cur = UI.helpTab || secs[0].id;
+  const sec = secs.find(function(x){ return x.id === cur; }) || secs[0];
+  const tabs = secs.map(function(x){
+    return '<button class="btn sm ' + (x.id === sec.id ? 'primary' : '') + '"'
+      + ' onclick="UI.helpTab=\'' + x.id + '\';render()">' + x.cn + '</button>';
+  }).join('');
+  const items = (sec.items || []).map(function(it){
+    return '<div class="item"><div class="nm">' + h(it.t) + '</div>'
+      + '<div class="meta" style="margin-top:4px;line-height:1.6">' + h(it.d) + '</div></div>';
+  }).join('');
+  return '<div class="modal"><div class="box" style="max-width:820px;position:relative">'
+    + '<button class="btn sm" style="position:absolute;top:12px;right:12px;z-index:5" onclick="UI.modal=null;render()">✕</button>'
+    + '<div class="kicker">HELP · 美国政治</div>'
+    + '<h2 style="padding-right:60px">' + h(sec.cn) + '</h2>'
+    + '<div class="row" style="flex-wrap:wrap;gap:6px;margin:8px 0 12px">' + tabs + '</div>'
+    + '<p class="muted" style="line-height:1.7">' + h(sec.intro || '') + '</p>'
+    + '<div class="list" style="max-height:420px">' + items + '</div>'
+    + (sec.tip ? '<div class="notice" style="margin-top:10px">游戏内：' + h(sec.tip) + '</div>' : '')
+    + '</div></div>';
+}
+
 function modalHTML(){
   // 冲击事件排队中而弹窗位空出来时，先把它放进来（同一冲击同时只有一个待处理事件）
   if(!UI.modal && typeof shockModalFlush==='function'){ try{ shockModalFlush(); }catch(e){} }
@@ -26793,6 +26999,7 @@ function modalHTML(){
   if(m.type==='nuclear'){ return (typeof nuclearPane==='function')? nuclearPane() : ''; }
   if(m.type==='reelect'){ return (typeof reelectPane==='function')? reelectPane() : ''; }
   if(m.type==='nightResult'){ return (typeof nightResultPane==='function')? nightResultPane() : ''; }
+  if(m.type==='help'){ return helpPane(); }
   if(m.type==='slots'){ return (typeof slotsPane==='function')? slotsPane() : ''; }
   if(m.type==='resume'){ return (typeof resumePane==='function')? resumePane() : ''; }
   if(m.type==='shockev'){
