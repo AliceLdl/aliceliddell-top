@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Never Gonna Give You Up</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230b0710'/><text x='16' y='24' font-size='20' text-anchor='middle'>%E2%96%B6</text></svg>">
+<style>
+  html,body{margin:0;padding:0;height:100%;background:#0b0710;overflow:hidden}
+  body{display:grid;place-items:center;font-family:system-ui,"Microsoft YaHei",sans-serif}
+
+  video{
+    display:block;width:100%;height:100%;
+    object-fit:contain;background:#000;
+  }
+
+  /* 浏览器拦截有声自动播放时出现的入口 */
+  #gate{
+    position:fixed;inset:0;display:none;place-items:center;
+    background:rgba(11,7,16,.78);
+    z-index:10;
+  }
+  #gate.on{display:grid}
+  #gate button{
+    font:inherit;font-size:16px;letter-spacing:3px;
+    padding:15px 34px;cursor:pointer;
+    color:#fff;background:#EB8CEA;
+    border:3px solid #5945B6;
+    border-radius:0;
+    box-shadow:5px 5px 0 #8414D0;
+    transition:background .12s,color .12s,box-shadow .12s;
+  }
+  #gate button:hover{background:#fff;color:#8414D0;box-shadow:5px 5px 0 #4AE1FC}
+  #gate button:active{transform:translate(3px,3px);box-shadow:1px 1px 0 #8414D0}
+</style>
+</head>
+<body>
+
+<video id="v" src="never-gonna-give-you-up.mp4" controls playsinline preload="auto"></video>
+<div id="gate"><button id="play" type="button">▶ 播放</button></div>
+
+<script>
+(function(){
+  var v = document.getElementById('v');
+  var gate = document.getElementById('gate');
+
+  function showGate(){ gate.classList.add('on'); }
+  function hideGate(){ gate.classList.remove('on'); }
+
+  // 1) 先尝试有声自动播放
+  var p = v.play();
+  if (p && p.then) {
+    p.then(hideGate).catch(function(){
+      // 2) 被策略拦截 —— 降级为静音自动播放，让画面先动起来
+      v.muted = true;
+      var p2 = v.play();
+      if (p2 && p2.then) {
+        p2.then(showGate).catch(showGate);
+      } else {
+        showGate();
+      }
+    });
+  } else {
+    showGate();
+  }
+
+  // 用户点击后开声音
+  document.getElementById('play').addEventListener('click', function(){
+    v.muted = false;
+    v.volume = 1;
+    var p3 = v.play();
+    if (p3 && p3.then) p3.then(hideGate).catch(hideGate); else hideGate();
+  });
+
+  v.addEventListener('playing', function(){
+    if (!v.muted) hideGate();
+  });
+})();
+</script>
+
+</body>
+</html>
