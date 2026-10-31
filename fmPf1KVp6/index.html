@@ -15,67 +15,75 @@
     object-fit:contain;background:#000;
   }
 
-  /* 浏览器拦截有声自动播放时出现的入口 */
-  #gate{
-    position:fixed;inset:0;display:none;place-items:center;
-    background:rgba(11,7,16,.78);
-    z-index:10;
-  }
-  #gate.on{display:grid}
-  #gate button{
-    font:inherit;font-size:16px;letter-spacing:3px;
-    padding:15px 34px;cursor:pointer;
+  /* 仅当处于静音播放时，右上角出现的小提示；绝不遮挡画面 */
+  #sound{
+    position:fixed;top:14px;right:14px;z-index:10;
+    display:none;align-items:center;gap:8px;
+    padding:9px 15px;cursor:pointer;
+    font:inherit;font-size:13px;letter-spacing:1px;
     color:#fff;background:#EB8CEA;
-    border:3px solid #5945B6;
-    border-radius:0;
-    box-shadow:5px 5px 0 #8414D0;
+    border:3px solid #5945B6;border-radius:0;
+    box-shadow:4px 4px 0 #8414D0;
     transition:background .12s,color .12s,box-shadow .12s;
   }
-  #gate button:hover{background:#fff;color:#8414D0;box-shadow:5px 5px 0 #4AE1FC}
-  #gate button:active{transform:translate(3px,3px);box-shadow:1px 1px 0 #8414D0}
+  #sound.on{display:flex}
+  #sound:hover{background:#fff;color:#8414D0;box-shadow:4px 4px 0 #4AE1FC}
+  #sound:active{transform:translate(2px,2px);box-shadow:1px 1px 0 #8414D0}
 </style>
 </head>
 <body>
 
 <video id="v" src="never-gonna-give-you-up.mp4" controls playsinline preload="auto"></video>
-<div id="gate"><button id="play" type="button">▶ 播放</button></div>
+<button id="sound" type="button">🔊 开启声音</button>
 
 <script>
 (function(){
-  var v = document.getElementById('v');
-  var gate = document.getElementById('gate');
+  var v   = document.getElementById('v');
+  var btn = document.getElementById('sound');
 
-  function showGate(){ gate.classList.add('on'); }
-  function hideGate(){ gate.classList.remove('on'); }
-
-  // 1) 先尝试有声自动播放
-  var p = v.play();
-  if (p && p.then) {
-    p.then(hideGate).catch(function(){
-      // 2) 被策略拦截 —— 降级为静音自动播放，让画面先动起来
-      v.muted = true;
-      var p2 = v.play();
-      if (p2 && p2.then) {
-        p2.then(showGate).catch(showGate);
-      } else {
-        showGate();
-      }
-    });
-  } else {
-    showGate();
+  // 提示只在「正在播放 且 静音」时出现
+  function sync(){
+    if (!v.paused && v.muted) {
+      btn.textContent = '🔊 开启声音';
+      btn.classList.add('on');
+    } else {
+      btn.classList.remove('on');
+    }
   }
 
-  // 用户点击后开声音
-  document.getElementById('play').addEventListener('click', function(){
-    v.muted = false;
-    v.volume = 1;
-    var p3 = v.play();
-    if (p3 && p3.then) p3.then(hideGate).catch(hideGate); else hideGate();
+  // 优先有声自动播放；被策略拦截则静音播放
+  var p = v.play();
+  if (p && p.catch) {
+    p.catch(function(){
+      v.muted = true;
+      var p2 = v.play();
+      if (p2 && p2.catch) {
+        p2.catch(function(){
+          // 连静音播放都被拒：只能等用户点一下
+          btn.textContent = '▶ 播放';
+          btn.classList.add('on');
+        });
+      }
+    });
+  }
+
+  btn.addEventListener('click', function(){
+    if (v.paused) {
+      v.muted = false;
+      v.volume = 1;
+      var p3 = v.play();
+      if (p3 && p3.catch) p3.catch(function(){});
+    } else {
+      v.muted = false;
+      v.volume = 1;
+    }
+    sync();
   });
 
-  v.addEventListener('playing', function(){
-    if (!v.muted) hideGate();
-  });
+  v.addEventListener('playing', sync);
+  v.addEventListener('pause', function(){ btn.classList.remove('on'); });
+  v.addEventListener('volumechange', sync);
+  v.addEventListener('ended', function(){ btn.classList.remove('on'); });
 })();
 </script>
 
