@@ -1,0 +1,2019 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>马步扫雷</title>
+<style>
+  :root{
+    --face:#c0c0c0;
+    --light:#ffffff;
+    --shadow:#808080;
+    --darker:#000000;
+    --cell:30px;
+    --cols:9;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;padding:22px 12px 60px;min-height:100vh;background:#008080;
+    font-family:Tahoma,"MS Sans Serif","Microsoft YaHei",sans-serif;font-size:12px;color:#000;
+    display:flex;justify-content:center;align-items:flex-start;
+  }
+  .window{
+    background:var(--face);padding:0;
+    border:2px solid;border-color:var(--light) var(--darker) var(--darker) var(--light);
+    box-shadow:1px 1px 0 #000;
+  }
+  /* 标题栏 */
+  .titlebar{
+    display:flex;align-items:center;gap:5px;height:22px;padding:0 3px 0 3px;
+    background:linear-gradient(90deg,#000080,#1084d0);color:#fff;font-weight:bold;
+  }
+  .tb-icon{width:14px;height:14px;flex:0 0 auto;background:#fff;border:1px solid #000;position:relative}
+  .tb-icon::after{content:'♞';position:absolute;left:1px;top:-2px;font-size:12px;line-height:16px;color:#000}
+  .tb-text{flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tb-btns{display:flex;gap:2px;flex:0 0 auto}
+  .tb-btns i{
+    width:16px;height:14px;background:var(--face);color:#000;font-style:normal;
+    font-size:10px;line-height:12px;text-align:center;font-weight:bold;
+    border:1px solid;border-color:var(--light) var(--darker) var(--darker) var(--light);
+  }
+  /* 自定义棋盘参数面板 */
+  .custom-panel{
+    display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;
+    padding:6px 8px;border-top:1px solid var(--shadow);
+    box-shadow:inset 2px 2px 0 var(--shadow),inset -2px -2px 0 var(--light);
+  }
+  .custom-panel[hidden]{display:none}
+  .custom-panel label{display:inline-flex;align-items:center;gap:3px}
+  .custom-panel input{
+    width:52px;font:inherit;padding:1px 2px;background:#fff;color:#000;
+    border:1px solid;border-color:var(--shadow) var(--light) var(--light) var(--shadow);
+  }
+  /* 菜单栏 */
+  .menubar{display:flex;align-items:center;gap:4px;padding:3px 4px;border-bottom:1px solid var(--shadow);flex-wrap:wrap}
+  .mbtn{
+    font:inherit;background:var(--face);color:#000;padding:2px 8px;cursor:pointer;
+    border:1px solid;border-color:var(--light) var(--darker) var(--darker) var(--light);
+  }
+  .mbtn:active,.mbtn.active{border-color:var(--darker) var(--light) var(--light) var(--darker);padding:3px 7px 1px 9px}
+  .mbtn.active{font-weight:bold}
+  .mbtn:disabled{color:#8a8a8a;cursor:default}
+  .mbtn:disabled:active{padding:2px 8px;border-color:var(--light) var(--darker) var(--darker) var(--light)}
+  .spacer{flex:1 1 auto}
+  /* 主体 */
+  .frame{padding:6px}
+  .frame,.hud{box-shadow:inset 2px 2px 0 var(--shadow),inset -2px -2px 0 var(--light)}
+  .hud{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:4px 6px;margin-bottom:6px;
+  }
+  .led{
+    background:#000;color:#ff0000;font-family:Consolas,"Courier New",monospace;
+    font-size:22px;font-weight:bold;line-height:1;letter-spacing:2px;
+    padding:3px 4px;min-width:56px;text-align:center;
+    border:1px solid;border-color:var(--shadow) var(--light) var(--light) var(--shadow);
+    text-shadow:0 0 6px rgba(255,0,0,.75);
+  }
+  .face{
+    width:34px;height:34px;font-size:19px;line-height:1;padding:0;cursor:pointer;
+    background:var(--face);display:flex;align-items:center;justify-content:center;
+    border:2px solid;border-color:var(--light) var(--darker) var(--darker) var(--light);
+  }
+  .face:active{border-color:var(--darker) var(--light) var(--light) var(--darker)}
+  /* 棋盘 */
+  .board{
+    display:grid;
+    grid-template-columns:repeat(var(--cols),var(--cell));
+    grid-auto-rows:var(--cell);
+    user-select:none;-webkit-user-select:none;cursor:default;
+  }
+  .cell{
+    width:var(--cell);height:var(--cell);display:flex;align-items:center;justify-content:center;
+    font-family:Tahoma,"MS Sans Serif",Arial,sans-serif;font-weight:bold;line-height:1;
+    font-size:calc(var(--cell)*0.62);
+    background:var(--face);
+    box-shadow:inset -2px -2px 0 var(--shadow),inset 2px 2px 0 var(--light);
+    overflow:hidden;white-space:nowrap;
+  }
+  .cell.rev{box-shadow:inset 0 0 0 1px #b0b0b0;cursor:default}
+  .cell.rev.boom{background:#ff0000}
+  .cell.wrong{color:#c00000;font-size:calc(var(--cell)*0.6)}
+  /* 提示：鼠标所在格的马步八格描边（.kn），中心格虚线框（.kc） */
+  .cell.kc{outline:2px dashed #0040c0;outline-offset:-2px}
+  .cell.kn{outline:2px solid #d08000;outline-offset:-2px}
+  .cell.n1{color:#0000ff}
+  .cell.n2{color:#008000}
+  .cell.n3{color:#ff0000}
+  .cell.n4{color:#000080}
+  .cell.n5{color:#800000}
+  .cell.n6{color:#008080}
+  .cell.n7{color:#000000}
+  .cell.n8{color:#808080}
+  /* 雷：一个带八根刺的圆（刺的数目正好就是马步八个方向） */
+  .mine{width:66%;height:66%;display:block}
+  /* 旗子（内联 SVG） */
+  .flag{width:calc(var(--cell)*0.46);height:calc(var(--cell)*0.66);display:block}
+  /* 状态栏与说明 */
+  .statusbar{padding:3px 6px;border-top:1px solid var(--shadow);display:flex;gap:10px;flex-wrap:wrap}
+  .statusbar .seg{
+    padding:1px 6px;border:1px solid;border-color:var(--shadow) var(--light) var(--light) var(--shadow);
+    color:#000;
+  }
+  .legend{    display:flex;flex-wrap:wrap;gap:8px 16px;padding:8px 10px 4px;align-items:center;
+  }
+  .legend .lg{display:inline-flex;align-items:center;gap:6px}
+  .legend .cell{flex:0 0 auto}
+  /* 图例里的小马步示意图：5×5 网格 */
+  .kmap{display:grid;grid-template-columns:repeat(5,16px);grid-auto-rows:16px;gap:1px;background:#9a9a9a;padding:1px}
+  .kmap .kc2{background:#0040c0}
+  .kmap .kn2{background:#e0a000}
+  .kmap .kz{background:#e8e8e8}
+  .k{font-family:Consolas,"Courier New",monospace;background:#e8e8e8;border:1px solid #a0a0a0;padding:0 3px}
+</style>
+</head>
+<body>
+<div class="window" id="app">
+  <div class="titlebar">
+    <span class="tb-icon"></span>
+    <span class="tb-text">马步扫雷</span>
+    <span class="tb-btns"><i>_</i><i>□</i><i>×</i></span>
+  </div>
+
+  <div class="menubar">
+    <button class="mbtn" data-diff="beginner">初级</button>
+    <button class="mbtn" data-diff="intermediate">中级</button>
+    <button class="mbtn" data-diff="expert">高级</button>
+    <button class="mbtn" data-diff="ultimate">究极</button>
+    <button class="mbtn" id="customBtn">自定义…</button>
+    <span class="spacer"></span>
+    <button class="mbtn" id="wrapToggle">边界：关</button>
+    <button class="mbtn" id="hintToggle">提示：开</button>
+    <button class="mbtn active" id="noguess">免猜：开</button>
+    <button class="mbtn" id="solveStep">求解一步</button>
+    <button class="mbtn" id="solveAuto">自动求解</button>
+    <button class="mbtn" id="restart">重开 (F2)</button>
+  </div>
+
+  <div class="custom-panel" id="customPanel" hidden>
+    <label>行 <input id="cRows" type="number" min="3" max="30" value="16"></label>
+    <label>列 <input id="cCols" type="number" min="3" max="40" value="16"></label>
+    <label>雷数 <input id="cMines" type="number" min="1" value="40"></label>
+    <button class="mbtn" id="cOk">开始</button>
+    <button class="mbtn" id="cCancel">取消</button>
+  </div>
+
+  <div class="frame">
+    <div class="hud">
+      <div class="led" id="mineLed">010</div>
+      <button class="face" id="face" title="重新开始">🙂</button>
+      <div class="led" id="timeLed">000</div>
+    </div>
+    <div class="board" id="board"></div>
+  </div>
+
+  <div class="statusbar">
+    <div class="seg" id="status1">—</div>
+    <div class="seg" id="status2">—</div>
+  </div>
+
+  <div class="legend" style="--cell:26px">
+    <span class="lg"><span class="kmap" id="lgMap"></span><span>蓝框 = 这一格，橙格 = 它的马步八格</span></span>
+    <span class="lg"><span class="cell rev" id="lgMine"></span>雷</span>
+    <span class="lg"><span class="cell" id="lgFlag"></span>旗</span>
+    <span class="lg"><span class="cell" id="lgFlagQ"></span>问号旗</span>
+    <span class="lg"><span class="cell rev n3" id="lgNum">3</span><span id="lgNumLabel">数字 = 马步八格里的雷数</span></span>
+    <span class="lg"><span class="cell rev" id="lgBlank"></span>空白 = 马步八格一颗雷都没有</span>
+  </div>
+</div>
+
+<script>
+/* ===== game.js（内联） ===== */
+/* ============================================================
+ * 马步扫雷  ——  核心逻辑（不依赖 DOM，可被 node 直接测试）
+ *
+ * 规则：一个格子上的数字 = 它的「马步八格」里一共有几颗雷。
+ *   马步八格 = 国际象棋的马一步能跳到的八个位置：
+ *     (±1,±2)、(±2,±1)；越界的走法不算，所以边上不到 8 格。
+ *   一格最多 8 颗雷，数字范围 0~8。
+ *
+ * 和经典扫雷最大的不同（两条都按马步算，不按相邻八格算）：
+ *   ① 数字的邻域是马步 —— 上下左右、四个对角格和这一格的数字毫无关系；
+ *   ② 数字 0 = 马步八格里一颗雷都没有 -> 连锁展开也**只沿马步八格蔓延**，
+ *      上下左右/对角那八个「挨着」的格子不会被带开。
+ *
+ * 棋盘状态：'ready' -> 'playing' -> 'won' | 'lost'
+ * 公开方法都返回“需要重绘的格子下标数组”，方便 UI 增量刷新。
+ * ============================================================ */
+(function (global) {
+  'use strict';
+
+  var EMPTY = 0, MINE = 1;
+  var FLAG_NONE = 0, FLAG_MINE = 1, FLAG_QUESTION = 2;
+
+  // 是否“已插旗”（问号旗不算）
+  function isFlag(flag) { return flag === FLAG_MINE; }
+
+  /* ---------- 与显示有关的纯函数 ---------- */
+
+  // 数字文字：0 显示成空白（马步八格一颗雷都没有 = 真正的空地）
+  function numberText(v) { return v > 0 ? String(v) : ''; }
+
+  // 经典扫雷的 1~8 号配色
+  function numberClass(v) { return v > 0 ? 'n' + (v > 8 ? 8 : v) : ''; }
+
+  /* ---------- 随机数/工具 ---------- */
+
+  // 可复现的随机源：生成“免猜地图”时要按种子反复重试，必须能复现同一张图
+  function makeRng(seed) {
+    var s = ((seed | 0) || 1) >>> 0;
+    return function () {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s / 4294967296;
+    };
+  }
+
+  function shuffle(arr, rng) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(rng() * (i + 1));
+      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    return arr;
+  }
+
+  // 马的八种走法
+  var KNIGHT_OFF = [
+    [-2, -1], [-2, 1], [-1, -2], [-1, 2],
+    [1, -2], [1, 2], [2, -1], [2, 1]
+  ];
+
+  /* ---------- 建局 ---------- */
+
+  /**
+   * @param {object} options
+   *   rows, cols    棋盘尺寸
+   *   mines         雷数
+   *   rng           可选，随机源（测试可注入固定序列）
+   *   layout        可选，字符串数组/字符串：'.'=空 'x'/'X'/'*'/'1'=雷
+   *   wrap          可选，环面（上下、左右边界相连，马步也按环面走）
+   */
+  function createGame(options) {
+    var rows = options.rows, cols = options.cols;
+    var rng = options.rng || Math.random;
+    var layout = options.layout || null;
+    var total = rows * cols;
+    var wrap = !!options.wrap;
+
+    var cells = new Array(total);
+    for (var i = 0; i < total; i++) {
+      cells[i] = { mine: EMPTY, value: 0, rev: false, flag: FLAG_NONE };
+    }
+
+    var game = {
+      rows: rows,
+      cols: cols,
+      wrap: wrap,
+      cells: cells,
+      mines: 0,
+      state: 'ready',
+      hitIndex: -1,
+      revealedCount: 0,
+      flagsPlaced: 0,
+      preplaced: false,
+      adj: null
+    };
+
+    function index(r, c) { return r * cols + c; }
+    game.index = index;
+
+    /* ---------- 马步邻域（建局时算好，求解器/测试直接用） ---------- */
+
+    // 从 (r,c) 跳一步；越界返回 -1，回到自己返回 -1（极小棋盘的退化情况）
+    function stepTo(r, c, dr, dc, self) {
+      var nr, nc;
+      if (wrap) {
+        nr = ((r + dr) % rows + rows) % rows;
+        nc = ((c + dc) % cols + cols) % cols;
+      } else {
+        nr = r + dr;
+        nc = c + dc;
+        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) return -1;
+      }
+      var k = nr * cols + nc;
+      return k === self ? -1 : k;
+    }
+
+    var adj = new Array(total);
+    for (var a = 0; a < total; a++) {
+      var ar = (a / cols) | 0, ac = a % cols;
+      var list = [];
+      var seen = null;
+      // 环面 + 很窄的棋盘时两种走法可能落到同一格，这里去重
+      if (wrap && (rows < 5 || cols < 5)) seen = {};
+      for (var o = 0; o < KNIGHT_OFF.length; o++) {
+        var j = stepTo(ar, ac, KNIGHT_OFF[o][0], KNIGHT_OFF[o][1], a);
+        if (j < 0) continue;
+        if (seen) { if (seen[j]) continue; seen[j] = 1; }
+        list.push(j);
+      }
+      adj[a] = list;
+    }
+    game.adj = adj;
+
+    function forEachKnight(i, fn) {
+      var list = adj[i];
+      for (var k = 0; k < list.length; k++) fn(list[k]);
+    }
+    game.forEachKnight = forEachKnight;
+    game.knightOf = function (i) { return adj[i].slice(); };
+
+    /* ---------- 计数 ---------- */
+
+    // 每格的数字 = 它的马步八格里有几颗雷
+    function recompute() {
+      for (var i = 0; i < total; i++) cells[i].value = 0;
+      for (var k = 0; k < total; k++) {
+        if (cells[k].mine === EMPTY) continue;
+        forEachKnight(k, function (n) { cells[n].value++; });
+      }
+    }
+
+    function recountMines() {
+      var m = 0;
+      for (var i = 0; i < total; i++) if (cells[i].mine !== EMPTY) m++;
+      game.mines = m;
+    }
+
+    // 首次点击后再布雷：避开点击格**以及它的马步八格**（保证首点数字必为 0，
+    // 也就是首点一定沿马步展开一片空地）
+    function placeMines(safeIndex) {
+      var forbidden = {};
+      forbidden[safeIndex] = true;
+      forEachKnight(safeIndex, function (n) { forbidden[n] = true; });
+
+      var pool = [];
+      for (var i = 0; i < total; i++) if (!forbidden[i]) pool.push(i);
+      if (pool.length < game.mines) {
+        // 极端小棋盘兜底：只避开点击格本身
+        pool = [];
+        for (var j = 0; j < total; j++) if (j !== safeIndex) pool.push(j);
+      }
+      shuffle(pool, rng);
+
+      var n = Math.min(game.mines, pool.length);
+      for (var p = 0; p < n; p++) cells[pool[p]].mine = MINE;
+      recountMines();
+      recompute();
+    }
+
+    function allIndices() {
+      var a = new Array(total);
+      for (var i = 0; i < total; i++) a[i] = i;
+      return a;
+    }
+
+    function finish(state) { game.state = state; }
+
+    function checkWin() {
+      if (game.state === 'playing' && game.revealedCount === total - game.mines) {
+        finish('won');
+        return true;
+      }
+      return false;
+    }
+
+    // 翻开一片：只有数字 0（马步八格里一颗雷都没有）才连锁展开，
+    // 而且**只沿马步八个方向蔓延** —— 上下左右/四个对角格不属于这一格的邻域。
+    function flood(start) {
+      var stack = [start], changed = [];
+      while (stack.length) {
+        var i = stack.pop();
+        var cell = cells[i];
+        if (cell.rev || cell.mine !== EMPTY || isFlag(cell.flag)) continue;
+        cell.rev = true;
+        cell.flag = FLAG_NONE;
+        game.revealedCount++;
+        changed.push(i);
+        if (cell.value === 0) {
+          forEachKnight(i, function (n) {
+            var nb = cells[n];
+            if (!nb.rev && nb.mine === EMPTY && !isFlag(nb.flag)) stack.push(n);
+          });
+        }
+      }
+      return changed;
+    }
+
+    // 某一格马步八格里插了几面旗
+    function flagSum(i) {
+      var s = 0;
+      forEachKnight(i, function (n) { if (isFlag(cells[n].flag)) s++; });
+      return s;
+    }
+    game.flagSum = flagSum;
+
+    /* ---------- 公开操作 ---------- */
+
+    game.reveal = function (i) {
+      var cell = cells[i];
+      if (!cell) return [];
+      if (game.state === 'lost' || game.state === 'won') return [];
+      if (cell.rev || isFlag(cell.flag)) return [];
+
+      if (game.state === 'ready') {
+        if (!game.preplaced) placeMines(i);
+        game.state = 'playing';
+      }
+      if (cell.mine !== EMPTY) {
+        cell.rev = true;               // 踩中的那颗也翻出来，好让 UI 标红
+        game.hitIndex = i;
+        finish('lost');
+        return allIndices();          // 踩雷：整盘重绘（要展示所有雷）
+      }
+      var changed = flood(i);
+      if (checkWin()) return allIndices();
+      return changed;
+    };
+
+    // 右键循环：无 -> 旗 -> 问号 -> 无
+    game.toggleFlag = function (i) {
+      var cell = cells[i];
+      if (!cell) return [];
+      if (cell.rev || game.state === 'lost' || game.state === 'won') return [];
+      if (cell.flag === FLAG_NONE) {
+        cell.flag = FLAG_MINE; game.flagsPlaced++;
+      } else if (cell.flag === FLAG_MINE) {
+        cell.flag = FLAG_QUESTION; game.flagsPlaced--;
+      } else {
+        cell.flag = FLAG_NONE;
+      }
+      return [i];
+    };
+
+    // 直接指定旗子类型（UI 快捷键 / 求解器用）
+    game.setFlag = function (i, type) {
+      var cell = cells[i];
+      if (!cell) return [];
+      if (cell.rev || game.state === 'lost' || game.state === 'won') return [];
+      if (isFlag(cell.flag)) game.flagsPlaced--;
+      cell.flag = type;
+      if (isFlag(type)) game.flagsPlaced++;
+      return [i];
+    };
+
+    // 单击已翻开的数字：把马步八格里插的旗加起来，等于这一格的数字就展开其余马步格
+    game.chord = function (i) {
+      var cell = cells[i];
+      if (!cell || !cell.rev || game.state !== 'playing') return [];
+      if (cell.value === 0) return [];
+      if (flagSum(i) !== cell.value) return [];
+
+      var boom = -1;
+      forEachKnight(i, function (n) {
+        var nb = cells[n];
+        if (nb.rev || isFlag(nb.flag)) return;
+        if (nb.mine !== EMPTY) boom = n;
+      });
+      if (boom >= 0) {
+        cells[boom].rev = true;
+        game.hitIndex = boom;
+        finish('lost');
+        return allIndices();
+      }
+      var changed = [];
+      forEachKnight(i, function (n) {
+        var nb = cells[n];
+        if (nb.rev || isFlag(nb.flag)) return;
+        changed = changed.concat(flood(n));
+      });
+      if (checkWin()) return allIndices();
+      return changed;
+    };
+
+    game.valueAt = function (i) { return cells[i] ? cells[i].value : 0; };
+
+    // 供生成器“局部重掷”若干颗雷之后重算全部计数
+    game.recount = function () { recountMines(); recompute(); };
+
+    /* ---------- 存档：把当前局面压成纯数据，刷新页面后可以接着下 ---------- */
+
+    game.snapshot = function () {
+      var rev = '', flags = '', i, r, c, s;
+      for (i = 0; i < total; i++) {
+        rev += cells[i].rev ? '1' : '0';
+        flags += String(cells[i].flag);
+      }
+      var lines = [];
+      for (r = 0; r < rows; r++) {
+        s = '';
+        for (c = 0; c < cols; c++) {
+          s += cells[r * cols + c].mine === MINE ? 'x' : '.';
+        }
+        lines.push(s);
+      }
+      return {
+        rows: rows, cols: cols, wrap: wrap, mines: lines,
+        rev: rev, flags: flags, state: game.state, hitIndex: game.hitIndex
+      };
+    };
+
+    game.loadSnapshot = function (snap) {
+      if (!snap || snap.rows !== rows || snap.cols !== cols) return false;
+      if (!snap.rev || snap.rev.length !== total || !snap.flags || snap.flags.length !== total) return false;
+      if (!snap.mines || snap.mines.length !== rows) return false;
+      var i, f, r, c;
+      for (r = 0; r < rows; r++) {
+        var line = String(snap.mines[r]);
+        for (c = 0; c < cols; c++) {
+          var ch = line.charAt(c);
+          cells[r * cols + c].mine = (ch === 'x' || ch === 'X' || ch === '*' || ch === '1') ? MINE : EMPTY;
+        }
+      }
+      recompute();
+      recountMines();
+      game.preplaced = true;
+      for (i = 0; i < total; i++) {
+        cells[i].rev = snap.rev.charAt(i) === '1';
+        f = snap.flags.charCodeAt(i) - 48;
+        cells[i].flag = (f >= 0 && f <= 2) ? f : FLAG_NONE;
+      }
+      game.revealedCount = 0;
+      game.flagsPlaced = 0;
+      for (i = 0; i < total; i++) {
+        if (cells[i].rev) game.revealedCount++;
+        if (isFlag(cells[i].flag)) game.flagsPlaced++;
+      }
+      game.state = snap.state || 'playing';
+      game.hitIndex = (typeof snap.hitIndex === 'number') ? snap.hitIndex : -1;
+      return true;
+    };
+
+    /* ---------- 初始化 ---------- */
+
+    if (layout) {
+      var lines = (typeof layout === 'string' ? layout.split(/\r?\n/) : layout)
+        .map(function (s) { return String(s).trim(); })
+        .filter(function (s) { return s.length > 0; });
+      for (var r = 0; r < Math.min(rows, lines.length); r++) {
+        for (var c = 0; c < Math.min(cols, lines[r].length); c++) {
+          var ch = lines[r][c];
+          if (ch === 'x' || ch === 'X' || ch === '*' || ch === '1') cells[index(r, c)].mine = MINE;
+        }
+      }
+      game.preplaced = true;
+      recountMines();
+      recompute();
+    } else {
+      game.mines = Math.max(0, Math.min(options.mines | 0, total - 1));
+    }
+
+    return game;
+  }
+
+  global.MinesweeperKnight = {
+    EMPTY: EMPTY,
+    MINE: MINE,
+    FLAG_NONE: FLAG_NONE,
+    FLAG_MINE: FLAG_MINE,
+    FLAG_QUESTION: FLAG_QUESTION,
+    KNIGHT_OFF: KNIGHT_OFF,
+    isFlag: isFlag,
+    createGame: createGame,
+    makeRng: makeRng,
+    numberText: numberText,
+    numberClass: numberClass
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ===== solver.js（内联） ===== */
+/* ============================================================
+ * 马步扫雷 —— 自动求解器
+ *
+ * 玩家能看到的信息：
+ *   ① 每个已翻开格子的数字 v（0~8）—— 它的马步八格里有几颗雷
+ *   ② 全盘一共有几颗雷（状态栏就写着）
+ *   ③ 棋盘是不是环面（上下、左右边界相连）
+ * 本模块只用这些信息，**不读取没翻开的格子到底是什么**。
+ *
+ * 一条约束（来自一个已翻开的数字格 p）：
+ *   “p 的马步八格里的雷数” = v
+ * 注意邻域是马步（±1±2 / ±2±1），不是周围八格。
+ *
+ * 求解流程：
+ *   1) 每条约束只保留“还能填的格子”，算出还差几颗雷（need）；
+ *   2) 局部传播：
+ *        · need = 0            -> 这些格子都不可能是雷
+ *        · need = 剩余格数     -> 这些格子全都是雷
+ *        · 全局雷数能定死的（还剩 0 颗 / 剩余可放位置数 = 剩余雷数）也一并定下来
+ *   3) 未知格按“共享约束”拆连通块，逐块穷举所有合法赋值，
+ *      记下每格可能出现过的状态 + 每块用掉的雷数；
+ *   4) 跨块用全局雷数把不可能的组合剔掉（必要时重枚举一遍）；
+ *   5) 所有解里都只能是空格的 = 必然安全；都只能是雷的 = 必然是雷；
+ *   6) 仍然没有必然安全格时，挑“估计踩雷概率最小”的一格去猜。
+ *
+ * 穷举有节点数/时间上限；超限的块只保留传播得到的结论（依然可靠，只是少推断）。
+ * canSolve() 判定“这张图能不能不靠猜就通”；generateSolvable() 生成免猜地图
+ * （卡住时优先只重掷那一块附近的雷，要猜的格子超过半张图才整张重开）。
+ * ============================================================ */
+(function (global) {
+  'use strict';
+
+  var MS = global.MinesweeperKnight;
+
+  var S_UNKNOWN = 0, S_EMPTY = 1, S_MINE = 2;
+  var M_EMPTY = 1, M_MINE = 2, M_ALL = 3;
+
+  function maskOf(v) {
+    return v === S_EMPTY ? M_EMPTY : v === S_MINE ? M_MINE : 0;
+  }
+  function stateOf(mask) {
+    return mask === M_EMPTY ? S_EMPTY : mask === M_MINE ? S_MINE : S_UNKNOWN;
+  }
+
+  /* ================= 单块的穷举 =================
+   * comp: {cells:[全局下标]}   cons: [{pos:[局部下标], need}]
+   * domAt: 每格候选掩码；filter: 限定“这块用掉几颗雷”；
+   * budget/timeMs 限制规模。
+   * 返回 { keys, masks, perCell, solCount, aborted }
+   * 说明：只有 aborted=false 时 masks 才是“精确”的；aborted=true 时的 masks
+   * 是“已找到的解的并集”，可能漏解，调用方必须忽略它（只能用传播结果）。 */
+  function enumerateComponent(comp, cons, domAt, filter, budget, t0, timeMs) {
+    var m = comp.cells.length;
+    var assign = new Array(m);
+    var k;
+    for (k = 0; k < m; k++) assign[k] = S_UNKNOWN;
+
+    var solCount = 0, cellMask = new Array(m), perCell = [];
+    for (k = 0; k < m; k++) { cellMask[k] = 0; perCell.push([0, 0]); }
+    var keys = {}, nodes = 0, aborted = false;
+
+    function record() {
+      // 兜底：所有约束都必须精确满足
+      for (var q = 0; q < cons.length; q++) if (!satisfied(cons[q])) return;
+      var used = 0, t;
+      for (t = 0; t < m; t++) if (assign[t] === S_MINE) used++;
+      var key = String(used);
+      if (filter && !filter(key)) return;
+      keys[key] = true;
+      solCount++;
+      for (t = 0; t < m; t++) {
+        var v = assign[t];
+        cellMask[t] |= maskOf(v);
+        perCell[t][v === S_EMPTY ? 0 : 1]++;
+      }
+    }
+
+    function contributed(c) {
+      var got = 0;
+      for (var t = 0; t < c.pos.length; t++) if (assign[c.pos[t]] === S_MINE) got++;
+      return got;
+    }
+
+    function satisfied(c) { return contributed(c) === c.need; }
+
+    // 顺便检出已被违反的约束，并挑“未赋值格最少”的那条来分支
+    function pick() {
+      var best = null, bestUn = 1e9;
+      for (var ci = 0; ci < cons.length; ci++) {
+        var c = cons[ci], un = 0, got = 0, t;
+        for (t = 0; t < c.pos.length; t++) {
+          var st = assign[c.pos[t]];
+          if (st === S_UNKNOWN) un++;
+          else if (st === S_MINE) got++;
+        }
+        if (got > c.need) return { fail: true };          // 雷放多了
+        if (got + un < c.need) return { fail: true };     // 剩下的位置全放雷也不够
+        if (un === 0) continue;
+        if (un < bestUn) { bestUn = un; best = c; }
+      }
+      return { c: best };
+    }
+
+    function dfs() {
+      if (aborted) return;
+      if (++nodes > budget.nodes) { aborted = true; return; }
+      if ((nodes & 63) === 0 && Date.now() - t0 > timeMs) { aborted = true; return; }
+      var pk = pick();
+      if (pk.fail) return;
+      if (!pk.c) { record(); return; }
+
+      var c = pk.c, target = -1, t;
+      for (t = 0; t < c.pos.length; t++) {
+        if (assign[c.pos[t]] === S_UNKNOWN) { target = c.pos[t]; break; }
+      }
+      var d = domAt[target];
+      if (d & M_MINE) {
+        assign[target] = S_MINE;
+        dfs();
+        assign[target] = S_UNKNOWN;
+      }
+      if (aborted) return;
+      if (d & M_EMPTY) {
+        assign[target] = S_EMPTY;
+        dfs();
+        assign[target] = S_UNKNOWN;
+      }
+    }
+
+    dfs();
+    return { keys: keys, masks: cellMask, perCell: perCell, solCount: solCount, aborted: aborted };
+  }
+
+  function keysOf(info) {
+    var out = [];
+    for (var key in info.keys) {
+      if (!Object.prototype.hasOwnProperty.call(info.keys, key)) continue;
+      out.push(+key);
+    }
+    return out;
+  }
+
+  /* ================= 分析 ================= */
+  function analyze(game, options) {
+    options = options || {};
+    var nodeCap = options.nodeCap || 60000;
+    var timeMs = options.timeMs || 400;
+    var t0 = Date.now();
+
+    var cells = game.cells, n = cells.length, adj = game.adj, i;
+    var state = new Array(n), dom = new Array(n);
+    for (i = 0; i < n; i++) {
+      if (cells[i].rev) { state[i] = S_EMPTY; dom[i] = M_EMPTY; }
+      else { state[i] = S_UNKNOWN; dom[i] = M_ALL; }
+    }
+
+    function setDom(j, mask) {
+      if (!mask || dom[j] === mask) return false;
+      dom[j] = mask;
+      var st = stateOf(mask);
+      if (st !== S_UNKNOWN) state[j] = st;
+      return true;
+    }
+
+    // 每条约束：马步八格里“还没定”的格子 + 还差几颗雷
+    function buildConstraints() {
+      var list = [];
+      for (var ci = 0; ci < n; ci++) {
+        if (!cells[ci].rev) continue;
+        var pos = [], known = 0, nb = adj[ci];
+        for (var t = 0; t < nb.length; t++) {
+          var j = nb[t];
+          if (state[j] === S_UNKNOWN) pos.push(j);
+          else if (state[j] === S_MINE) known++;
+        }
+        list.push({ center: ci, pos: pos, need: cells[ci].value - known });
+      }
+      return list;
+    }
+
+    /* ---------- 局部传播 + 全局雷数 ---------- */
+    var constraints = buildConstraints();
+    var changed = true, round = 0;
+    while (changed && round++ < 60) {
+      changed = false;
+
+      for (var ci2 = 0; ci2 < constraints.length; ci2++) {
+        var c = constraints[ci2];
+        if (!c.pos.length) continue;
+        var cap = 0, t2;
+        for (t2 = 0; t2 < c.pos.length; t2++) if (dom[c.pos[t2]] & M_MINE) cap++;
+        if (c.need < 0 || c.need > cap) continue;          // 矛盾或信息不足：不动它
+        if (c.need === 0) {
+          for (t2 = 0; t2 < c.pos.length; t2++) {
+            if (setDom(c.pos[t2], dom[c.pos[t2]] & ~M_MINE)) changed = true;
+          }
+        } else if (c.need === cap) {
+          for (t2 = 0; t2 < c.pos.length; t2++) {
+            var j2 = c.pos[t2];
+            if (dom[j2] & M_MINE) { if (setDom(j2, M_MINE)) changed = true; }
+          }
+        }
+      }
+      if (changed) { constraints = buildConstraints(); continue; }
+
+      // 全局雷数：还剩几颗要放、还有几个位置放得下
+      var fixedMines = 0, unknownCount = 0, canMine = 0;
+      for (i = 0; i < n; i++) {
+        if (state[i] === S_MINE) fixedMines++;
+        else if (state[i] === S_UNKNOWN) {
+          unknownCount++;
+          if (dom[i] & M_MINE) canMine++;
+        }
+      }
+      var leftMines = game.mines - fixedMines;
+      if (leftMines >= 0) {
+        if (leftMines === 0) {
+          for (i = 0; i < n; i++) if (state[i] === S_UNKNOWN && (dom[i] & M_MINE)) { setDom(i, dom[i] & ~M_MINE); changed = true; }
+        } else if (leftMines === canMine) {
+          for (i = 0; i < n; i++) if (state[i] === S_UNKNOWN && (dom[i] & M_MINE)) { setDom(i, M_MINE); changed = true; }
+        } else if (leftMines === unknownCount) {
+          for (i = 0; i < n; i++) if (state[i] === S_UNKNOWN) { setDom(i, M_MINE); changed = true; }
+        }
+      }
+      if (changed) constraints = buildConstraints();
+    }
+
+    /* ---------- 未知格分组（按共享约束） ---------- */
+    var possible = new Array(n), prob = new Array(n);
+    for (i = 0; i < n; i++) {
+      possible[i] = state[i] === S_UNKNOWN ? dom[i] : 0;
+      prob[i] = NaN;
+    }
+
+    var unknownList = [];
+    for (i = 0; i < n; i++) if (state[i] === S_UNKNOWN) unknownList.push(i);
+
+    var parent = {};
+    function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+    function union(x, y) { x = find(x); y = find(y); if (x !== y) parent[x] = y; }
+    unknownList.forEach(function (u) { parent[u] = u; });
+    constraints.forEach(function (c) {
+      for (var k = 1; k < c.pos.length; k++) union(c.pos[0], c.pos[k]);
+    });
+    var comps = {};
+    unknownList.forEach(function (u) {
+      var r = find(u);
+      (comps[r] || (comps[r] = { cells: [], cons: [] })).cells.push(u);
+    });
+    constraints.forEach(function (c) {
+      if (!c.pos.length) return;
+      comps[find(c.pos[0])].cons.push(c);
+    });
+
+    var budget = { nodes: nodeCap };
+    var infos = [];
+    Object.keys(comps).forEach(function (r) {
+      var comp = comps[r];
+      var idxOf = {};
+      comp.cells.forEach(function (cc, k) { idxOf[cc] = k; });
+      var cons = comp.cons.map(function (c) {
+        return { pos: c.pos.map(function (x) { return idxOf[x]; }), need: c.need };
+      });
+      infos.push({
+        comp: comp,
+        cons: cons,
+        domAt: comp.cells.map(function (cc) { return dom[cc]; }),
+        trivial: comp.cons.length === 0,
+        keys: null,
+        res: null
+      });
+    });
+
+    var realInfos = [], freeCount = 0, isFree = new Array(n);
+    for (i = 0; i < n; i++) isFree[i] = false;
+    infos.forEach(function (x) {
+      if (x.trivial) {
+        freeCount += x.comp.cells.length;
+        x.comp.cells.forEach(function (cc) { isFree[cc] = true; });
+      } else realInfos.push(x);
+    });
+
+    var allOk = true;
+    realInfos.forEach(function (info) {
+      info.res = enumerateComponent(info.comp, info.cons, info.domAt, null, budget, t0, timeMs);
+      info.keys = info.res.keys;
+      if (info.res.aborted || !info.res.solCount) allOk = false;
+    });
+
+    // 已经定下来的雷
+    var fixedMines = 0;
+    for (i = 0; i < n; i++) if (state[i] === S_MINE) fixedMines++;
+    var leftMines = Math.max(0, game.mines - fixedMines);
+
+    function newVec() { return new Uint8Array(leftMines + 1); }
+    // dst[t + k] |= src[t]
+    function convInto(dst, src, ks) {
+      for (var t = 0; t <= leftMines; t++) {
+        if (!src[t]) continue;
+        for (var q = 0; q < ks.length; q++) {
+          var nt = t + ks[q];
+          if (nt <= leftMines) dst[nt] = 1;
+        }
+      }
+    }
+    function fullVec(list, skip) {
+      var dp = newVec();
+      dp[0] = 1;
+      for (var q = 0; q < list.length; q++) {
+        if (q === skip) continue;
+        var nx = newVec();
+        convInto(nx, dp, keysOf(list[q]));
+        dp = nx;
+      }
+      return dp;
+    }
+
+    /* ---------- 跨块用全局雷数过滤 ---------- */
+    if (allOk) {
+      var full = fullVec(realInfos, -1);
+      var feasible = false;
+      for (var r0 = 0; r0 <= leftMines; r0++) {
+        if (!full[r0]) continue;
+        var rest0 = leftMines - r0;
+        if (rest0 >= 0 && rest0 <= freeCount) { feasible = true; break; }
+      }
+
+      if (feasible) {
+        realInfos.forEach(function (info, k) {
+          var others = fullVec(realInfos, k);
+          var list = keysOf(info), allowed = {}, okAny = false;
+          for (var q = 0; q < list.length; q++) {
+            var kk = list[q], ok = false;
+            for (var r = 0; r <= leftMines && !ok; r++) {
+              if (!others[r]) continue;
+              var rest = leftMines - kk - r;
+              if (rest >= 0 && rest <= freeCount) ok = true;
+            }
+            if (ok) { allowed[String(kk)] = true; okAny = true; }
+          }
+          if (okAny && Object.keys(allowed).length < list.length) {
+            var res2 = enumerateComponent(info.comp, info.cons, info.domAt,
+              function (key) { return !!allowed[key]; }, budget, t0, timeMs);
+            if (!res2.aborted && res2.solCount > 0) { info.res = res2; info.keys = res2.keys; }
+          }
+        });
+      }
+    }
+
+    // 把（未超限的）穷举结果写回候选掩码
+    realInfos.forEach(function (info) {
+      if (!info.res || info.res.aborted || !info.res.solCount) return;
+      for (var t = 0; t < info.comp.cells.length; t++) {
+        var cellIdx = info.comp.cells[t];
+        possible[cellIdx] = info.res.masks[t];
+        prob[cellIdx] = info.res.perCell[t][1] / info.res.solCount;
+      }
+    });
+
+    // 孤立格（马步八格里没有任何已翻开格）只能靠全局雷数判断。
+    // 必须等所有连通块都穷举完整才能用 DP 算剩余雷数：
+    // 只要有块超限，它的“用掉几颗雷”就是不完整的，DP 会低估还要放的雷，
+    // 从而把孤立格错判成安全。
+    var freeMask = M_ALL;
+    if (freeCount > 0 && allOk) {
+      var fullDP = fullVec(realInfos, -1);
+      var canEmpty = false, canMine = false;
+      for (var r1 = 0; r1 <= leftMines; r1++) {
+        if (!fullDP[r1]) continue;
+        var rest = leftMines - r1;
+        if (rest < 0) continue;
+        if (rest <= freeCount - 1) canEmpty = true;                        // 这一格空着，剩下的放得下
+        if (rest >= 1 && rest - 1 <= freeCount - 1) canMine = true;        // 这一格放雷，剩下的也放得下
+      }
+      if (!canEmpty && !canMine) freeMask = M_ALL;
+      else freeMask = (canEmpty ? M_EMPTY : 0) | (canMine ? M_MINE : 0);
+    }
+
+    if (freeCount > 0) {
+      for (i = 0; i < n; i++) {
+        if (state[i] !== S_UNKNOWN) continue;
+        if (!isFree[i]) continue;
+        var pm = possible[i];
+        possible[i] = (pm === M_ALL || pm === 0) ? freeMask : (pm & freeMask);
+        if (!possible[i]) possible[i] = freeMask;
+      }
+    }
+
+    /* ---------- 汇总结论 ---------- */
+    var safe = [], mines = [], undetermined = [], unsure = 0;
+    for (i = 0; i < n; i++) {
+      if (state[i] === S_EMPTY) {
+        if (!cells[i].rev) safe.push(i);
+        continue;
+      }
+      if (state[i] === S_MINE) {
+        if (!cells[i].rev) { mines.push({ index: i }); undetermined.push(i); }
+        continue;
+      }
+      var m1 = possible[i] || M_ALL;
+      if (m1 === M_EMPTY) { safe.push(i); continue; }
+      if (m1 === M_MINE) { mines.push({ index: i }); undetermined.push(i); continue; }
+      undetermined.push(i);
+      if (m1 & M_EMPTY) unsure++;
+    }
+
+    // 猜：优先用穷举算出来的真实概率；没有就用启发式
+    var guess = -1, guessRisk = 1;
+    var definiteMines = mines.length;
+    var density = Math.max(0, game.mines - definiteMines) / Math.max(1, unknownList.length);
+    for (i = 0; i < undetermined.length; i++) {
+      var idx = undetermined[i];
+      if (possible[idx] === M_MINE) continue;
+      var p = prob[idx];
+      if (!(p >= 0) || !isFinite(p)) {
+        var share = 0.5;
+        p = density * share + (1 - share) * 0.5;
+        if (!(p > 0)) p = 0.5;
+        if (p > 0.99) p = 0.99;
+      }
+      if (p < guessRisk - 1e-9) { guessRisk = p; guess = idx; }
+    }
+
+    return {
+      safe: safe,
+      mines: mines,
+      undetermined: undetermined,
+      unsure: unsure,
+      guess: guess,
+      guessRisk: guessRisk,
+      complete: allOk,
+      unknownCount: unknownList.length
+    };
+  }
+
+  /* ================= 走一步 ================= */
+  function step(game, options) {
+    if (!game) return { actions: [], reason: '没有对局', guess: false };
+    if (game.state === 'lost' || game.state === 'won') {
+      return { actions: [], reason: '对局已结束', guess: false };
+    }
+    if (game.state === 'ready') {
+      return {
+        actions: [game.index(game.rows >> 1, game.cols >> 1)],
+        reason: '开局：点中心（首点的马步八格保证无雷）', guess: true, risk: 0
+      };
+    }
+    var res = analyze(game, options);
+    if (res.safe.length) {
+      return {
+        actions: res.safe.slice(),
+        reason: '推出 ' + res.safe.length + ' 格必然安全' +
+                (res.mines.length ? '、' + res.mines.length + ' 格必然是雷' : '') + '，翻开',
+        guess: false, risk: 0, result: res
+      };
+    }
+    if (res.guess >= 0) {
+      return {
+        actions: [res.guess],
+        reason: '没有必然解 → 猜一格（估计风险 ' + Math.round(res.guessRisk * 100) + '%）',
+        guess: true, risk: res.guessRisk, result: res
+      };
+    }
+    return { actions: [], reason: '没有可翻开的格子了', guess: false, result: res };
+  }
+
+  /* ================= 能否不靠猜通关 ================= */
+
+  // 复制一张图（含已翻开的格子），用来试算而不影响真实对局
+  function cloneRevealed(g) {
+    var lines = [], r, c, s, cell;
+    for (r = 0; r < g.rows; r++) {
+      s = '';
+      for (c = 0; c < g.cols; c++) {
+        cell = g.cells[g.index(r, c)];
+        s += cell.mine === MS.MINE ? 'x' : '.';
+      }
+      lines.push(s);
+    }
+    var sim = MS.createGame({ rows: g.rows, cols: g.cols, layout: lines, wrap: !!g.wrap });
+    for (var i = 0; i < g.cells.length; i++) if (g.cells[i].rev) sim.reveal(i);
+    return sim;
+  }
+
+  function canSolve(game, options) {
+    var sim = cloneRevealed(game);
+    var guard = 0, waves = 0;
+    var maxWaves = game.rows * game.cols + 4;
+    while (sim.state === 'playing' && guard++ < maxWaves) {
+      var res = analyze(sim, options);
+      if (!res.safe.length) {
+        return {
+          ok: false, reason: '需要猜', waves: waves, risk: res.guessRisk,
+          unknown: res.unknownCount, unsure: res.unsure, stuck: res.undetermined
+        };
+      }
+      waves++;
+      var before = sim.revealedCount;
+      for (var k = 0; k < res.safe.length; k++) {
+        sim.reveal(res.safe[k]);
+        if (sim.state !== 'playing') break;
+      }
+      if (sim.revealedCount === before) {
+        return { ok: false, reason: '推理停滞', waves: waves, unsure: res.unsure, stuck: res.undetermined };
+      }
+    }
+    return {
+      ok: sim.state === 'won',
+      reason: sim.state === 'won' ? '免猜可解' : sim.state,
+      waves: waves
+    };
+  }
+
+  /* ================= 生成“免猜可解”的地图 =================
+     思路：先随机一张图 → 用 canSolve 验一遍；如果卡在“必须猜”，
+     就找出卡住的那一块，**只重掷它附近的雷**（雷数不变），再验一遍；
+     要猜的格子超过半张图、或连续局部重掷多次都不行，才整张重开。 */
+
+  function shuffleInPlace(arr, rng) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(rng() * (i + 1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+
+  // 首点那格和马步八格不放雷（保证首点安全、数字为 0，一定沿马步开出一片）
+  function openingZone(rows, cols, openIndex, wrap) {
+    var zone = {}, r = (openIndex / cols) | 0, c = openIndex % cols;
+    var offs = [[0, 0]].concat(MS.KNIGHT_OFF);
+    for (var q = 0; q < offs.length; q++) {
+      var dr = offs[q][0], dc = offs[q][1], nr, nc;
+      if (wrap) {
+        nr = ((r + dr) % rows + rows) % rows;
+        nc = ((c + dc) % cols + cols) % cols;
+      } else {
+        nr = r + dr; nc = c + dc;
+        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+      }
+      zone[nr * cols + nc] = true;
+    }
+    return zone;
+  }
+
+  // 随机雷区：'x' 雷 / '.' 空
+  function randomGrid(rows, cols, mines, openIndex, rng, wrap) {
+    var zone = openingZone(rows, cols, openIndex, wrap);
+    var slots = [];
+    for (var i = 0; i < rows * cols; i++) if (!zone[i]) slots.push(i);
+    shuffleInPlace(slots, rng);
+    var grid = new Array(rows * cols);
+    for (i = 0; i < grid.length; i++) grid[i] = '.';
+    var n = Math.min(mines, slots.length);
+    for (i = 0; i < n; i++) grid[slots[i]] = 'x';
+    return grid;
+  }
+
+  function gridToGame(grid, rows, cols, openIndex, wrap) {
+    var lines = [];
+    for (var r = 0; r < rows; r++) lines.push(grid.slice(r * cols, r * cols + cols).join(''));
+    var g = MS.createGame({ rows: rows, cols: cols, layout: lines, wrap: wrap });
+    g.reveal(openIndex);
+    return g;
+  }
+
+  // 只重掷“卡住的那些格子”附近的雷；窗口内的雷数保持不变。
+  // 窗口里一颗雷都没有时，就从窗口外**挪一颗雷进来**（雷总数依然不变）——
+  // 这样永远是局部改动，永远不需要把整张图重新随机一遍。
+  function rerollWindow(grid, rows, cols, stuck, openIndex, radius, rng, wrap) {
+    var zone = openingZone(rows, cols, openIndex, wrap);
+    var inWin = {}, R = Math.max(1, radius | 0);
+    for (var s = 0; s < stuck.length; s++) {
+      var sr = (stuck[s] / cols) | 0, sc = stuck[s] % cols;
+      for (var dr = -R; dr <= R; dr++) {
+        for (var dc = -R; dc <= R; dc++) {
+          var nr, nc;
+          if (wrap) {
+            nr = ((sr + dr) % rows + rows) % rows;
+            nc = ((sc + dc) % cols + cols) % cols;
+          } else {
+            nr = sr + dr; nc = sc + dc;
+            if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+          }
+          var k = nr * cols + nc;
+          if (!zone[k]) inWin[k] = true;
+        }
+      }
+    }
+    var win = Object.keys(inWin).map(Number);
+    if (win.length < 4) return false;
+
+    var mineCells = win.filter(function (k) { return grid[k] === 'x'; });
+
+    if (!mineCells.length) {
+      // 窗口里没有雷：从窗口外挪一颗进来（局部改动，雷数不变）
+      var outside = [];
+      for (var i = 0; i < grid.length; i++) {
+        if (inWin[i] || zone[i]) continue;
+        if (grid[i] === 'x') outside.push(i);
+      }
+      if (!outside.length) return false;
+      var from = outside[Math.floor(rng() * outside.length)];
+      var to = win[Math.floor(rng() * win.length)];
+      grid[from] = '.';
+      grid[to] = 'x';
+      return true;
+    }
+
+    // 窗口内的雷全部收起来，随机撒回窗口里的任意位置（雷数不变）
+    var mineCount = mineCells.length;
+    for (var q = 0; q < mineCells.length; q++) grid[mineCells[q]] = '.';
+    var slots = win.slice();
+    shuffleInPlace(slots, rng);
+    for (q = 0; q < mineCount; q++) grid[slots[q]] = 'x';
+    return true;
+  }
+
+  /**
+   * 生成一张免猜可解的图。
+   * 只有“开局那一张”是随机造的；之后卡住时**永远只局部重掷**，不会再把整张图重新随机。
+   * opts: { rows, cols, mines, openIndex, wrap, nextSeed(), budgetMs（默认 5000）, timeMs, nodeCap, localRadius }
+   * 返回 { game, verified, tries, localRerolls, bestUnsure }
+   */
+  function generateSolvable(opts) {
+    var rows = opts.rows, cols = opts.cols;
+    var mines = opts.mines || 0;
+    var openIndex = opts.openIndex;
+    var wrap = !!opts.wrap;
+    var seed = opts.seed || 1;
+    var nextSeed = opts.nextSeed || function () { return seed++; };
+    var budgetMs = opts.budgetMs || 5000;
+    var maxTries = opts.maxTries || 200000;
+    var radius = opts.localRadius == null ? 2 : opts.localRadius;
+    var verOpts = {
+      nodeCap: opts.nodeCap || 30000,
+      timeMs: opts.timeMs || 60
+    };
+    var t0 = Date.now();
+
+    var grid = randomGrid(rows, cols, mines, openIndex, MS.makeRng(nextSeed()), wrap);
+    var game = null, tries = 0, localRerolls = 0;
+    var best = null, bestUnsure = Infinity, bestWaves = -1;
+
+    // 局部重掷：卡住就只动卡住那一块附近的雷；窗口太小就一格格把半径放大。
+    function localReroll(targets) {
+      if (rerollWindow(grid, rows, cols, targets, openIndex, radius, MS.makeRng(nextSeed()), wrap)) return true;
+      var grown = radius;
+      for (var att = 0; att < 10; att++) {
+        grown += 2;
+        if (rerollWindow(grid, rows, cols, targets, openIndex, grown, MS.makeRng(nextSeed()), wrap)) return true;
+      }
+      return false;
+    }
+
+    while (tries < maxTries && Date.now() - t0 < budgetMs) {
+      tries++;
+      game = gridToGame(grid, rows, cols, openIndex, wrap);
+      if (game.state !== 'playing') {
+        if (!localReroll([openIndex])) break;
+        localRerolls++;
+        continue;
+      }
+      var v = canSolve(game, verOpts);
+      if (v.ok && v.waves >= 1) {                           // 免猜且至少要推几轮才算数
+        return {
+          game: game, verified: true, tries: tries, waves: v.waves,
+          localRerolls: localRerolls
+        };
+      }
+      var unsure = (typeof v.unsure === 'number') ? v.unsure : (v.stuck ? v.stuck.length : Infinity);
+      var waves = v.waves || 0;
+      if (unsure < bestUnsure || (unsure === bestUnsure && waves > bestWaves)) {
+        best = game; bestUnsure = unsure; bestWaves = waves;
+      }
+      // 卡住的那一块就是重掷的重心；「一点就通关」这类没有卡点的图，
+      // 就取一个随尝试次数轮换的位置当重心 —— 依然是局部改动。
+      var stuck = v.stuck || [];
+      var targets = stuck.length ? stuck : [((openIndex * 7 + tries * 13) % (rows * cols))];
+      if (!localReroll(targets)) break;
+      localRerolls++;
+    }
+    return {
+      game: best || game, verified: false, tries: tries,
+      localRerolls: localRerolls,
+      bestUnsure: isFinite(bestUnsure) ? bestUnsure : null
+    };
+  }
+
+  MS.Solver = {
+    analyze: analyze,
+    step: step,
+    canSolve: canSolve,
+    cloneRevealed: cloneRevealed,
+    generateSolvable: generateSolvable,
+    rerollWindow: rerollWindow,
+    randomGrid: randomGrid,
+    gridToGame: gridToGame,
+    openingZone: openingZone,
+    enumerateComponent: enumerateComponent
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+(function () {
+  'use strict';
+  var MS = window.MinesweeperKnight;
+
+  var DIFFICULTIES = {
+    beginner:     { rows: 9,  cols: 9,  mines: 10, cell: 30, label: '初级' },
+    intermediate: { rows: 16, cols: 16, mines: 40, cell: 26, label: '中级' },
+    expert:       { rows: 16, cols: 30, mines: 99, cell: 22, label: '高级' },
+    ultimate:     { rows: 16, cols: 30, mines: 150, cell: 22, label: '究极' }
+  };
+
+  var app      = document.getElementById('app');
+  var boardEl  = document.getElementById('board');
+  var mineLed  = document.getElementById('mineLed');
+  var timeLed  = document.getElementById('timeLed');
+  var faceEl   = document.getElementById('face');
+  var restartB = document.getElementById('restart');
+  var stepB    = document.getElementById('solveStep');
+  var autoB    = document.getElementById('solveAuto');
+  var noGuessB = document.getElementById('noguess');
+  var wrapB    = document.getElementById('wrapToggle');
+  var hintB    = document.getElementById('hintToggle');
+  var customB  = document.getElementById('customBtn');
+  var customPanel = document.getElementById('customPanel');
+  var cRows = document.getElementById('cRows'), cCols = document.getElementById('cCols');
+  var cMines = document.getElementById('cMines');
+  var cOk = document.getElementById('cOk'), cCancel = document.getElementById('cCancel');
+  if (customPanel) customPanel.hidden = true;      // 默认收起自定义面板
+  var status1  = document.getElementById('status1');
+  var status2  = document.getElementById('status2');
+  var diffBtns = Array.prototype.slice.call(document.querySelectorAll('.mbtn[data-diff]'));
+
+  var diffKey = 'beginner';
+  var game = null;
+  var cellEls = [];
+  var elapsed = 0, timerId = null, timerStarted = false;
+  var pendingIndex = -1;
+  var autoTimer = null;
+  var seedCounter = 1;
+  var generating = false;
+  var noGuess = true;
+  var hintOn = true;
+  var wrapEnabled = false;         // 边界是否相连（默认关 = 经典扫雷）
+  var viewR = 0, viewC = 0;        // 地图平移偏移（方向键控制）
+  var hintIdx = -1;                // 鼠标所在格的棋盘下标
+  var hintSet = null;              // 需要描边的棋盘下标集合
+  var SETTINGS_KEY = 'ms_knight_settings_v1';
+  var GAME_KEY = 'ms_knight_game_v1';
+  var customCfg = { rows: 16, cols: 16, mines: 40 };   // 上次用的自定义参数
+
+  function clampInt(v, lo, hi) {
+    v = v | 0;
+    return v < lo ? lo : v > hi ? hi : v;
+  }
+
+  // 自定义难度：格子大小按棋盘尺寸自适应，保证整张棋盘放得下
+  function ensureCustomDifficulty() {
+    DIFFICULTIES.custom = {
+      rows: customCfg.rows,
+      cols: customCfg.cols,
+      mines: customCfg.mines,
+      cell: Math.max(16, Math.min(30, Math.floor(760 / Math.max(customCfg.cols, customCfg.rows)))),
+      label: '自定义'
+    };
+  }
+
+  /* ---------------- 存档（刷新页面后不丢设置和进度） ---------------- */
+
+  function loadSettings() {
+    try {
+      var raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return;
+      var s = JSON.parse(raw);
+      if (typeof s.noGuess === 'boolean') noGuess = s.noGuess;
+      if (typeof s.wrap === 'boolean') wrapEnabled = s.wrap;
+      if (typeof s.hint === 'boolean') hintOn = s.hint;
+      if (s.diff && DIFFICULTIES[s.diff]) diffKey = s.diff;
+      if (s.custom && typeof s.custom.rows === 'number') {
+        customCfg = {
+          rows: clampInt(s.custom.rows, 3, 30),
+          cols: clampInt(s.custom.cols, 3, 40),
+          mines: Math.max(1, s.custom.mines | 0)
+        };
+      }
+    } catch (e) { /* 隐私模式等情况：忽略 */ }
+  }
+
+  function saveSettings() {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+        noGuess: noGuess, wrap: wrapEnabled, hint: hintOn, diff: diffKey, custom: customCfg
+      }));
+    } catch (e) { /* 忽略 */ }
+  }
+
+  function saveGame() {
+    try {
+      if (!game || game.state === 'ready' || game.state === 'won' || game.state === 'lost') {
+        if (localStorage.removeItem) localStorage.removeItem(GAME_KEY);
+        return;
+      }
+      var snap = game.snapshot();
+      snap.diff = diffKey;
+      snap.elapsed = elapsed;
+      snap.viewR = viewR;
+      snap.viewC = viewC;
+      localStorage.setItem(GAME_KEY, JSON.stringify(snap));
+    } catch (e) { /* 忽略 */ }
+  }
+
+  // 恢复刷新前那局（只有“进行中”的局才恢复）
+  function restoreGame() {
+    try {
+      var raw = localStorage.getItem(GAME_KEY);
+      if (!raw) return false;
+      var snap = JSON.parse(raw);
+      if (!snap || !DIFFICULTIES[snap.diff]) return false;
+      var cfg = DIFFICULTIES[snap.diff];
+      if (snap.rows !== cfg.rows || snap.cols !== cfg.cols) return false;
+      var g = MS.createGame({ rows: cfg.rows, cols: cfg.cols, wrap: !!snap.wrap, layout: snap.mines });
+      if (!g.loadSnapshot(snap)) return false;
+      if (g.state !== 'playing' || g.revealedCount === 0) return false;
+
+      diffKey = snap.diff;
+      wrapEnabled = !!snap.wrap;
+      game = g;
+      elapsed = snap.elapsed || 0;
+      viewR = snap.viewR || 0;
+      viewC = snap.viewC || 0;
+      buildBoard(cfg);
+      paintAll();
+      updateHud();
+      syncWrap(); syncNoGuess(); syncHint();
+      diffBtns.forEach(function (b) { b.classList.toggle('active', b.dataset.diff === diffKey); });
+      faceEl.textContent = '\uD83D\uDE42';
+      timerStarted = false;
+      startTimer();
+      setStatus2('已恢复刷新前的对局：已翻 ' + game.revealedCount + ' 格，计时 ' + elapsed + ' 秒');
+      return true;
+    } catch (e) { return false; }
+  }
+
+  /* ---------------- 布局 ---------------- */
+
+  function buildBoard(cfg) {
+    boardEl.innerHTML = '';
+    boardEl.style.setProperty('--cell', cfg.cell + 'px');
+    boardEl.style.setProperty('--cols', cfg.cols);
+    cellEls = new Array(cfg.rows * cfg.cols);
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < cfg.rows * cfg.cols; i++) {
+      var d = document.createElement('div');
+      d.className = 'cell';
+      d.dataset.i = String(i);
+      cellEls[i] = d;
+      frag.appendChild(d);
+    }
+    boardEl.appendChild(frag);
+    // 窗口宽度贴合棋盘宽度，方便下方说明文字正常换行
+    app.style.width = Math.max(cfg.cols * cfg.cell + 16, 400) + 'px';
+    hintIdx = -1; hintSet = null;
+  }
+
+  /* ---------------- 绘制 ---------------- */
+
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  function svgEl(tag, attrs) {
+    var el = document.createElementNS(SVGNS, tag);
+    for (var k in attrs) if (Object.prototype.hasOwnProperty.call(attrs, k)) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  // 雷：一个圆加八根刺 —— 刺正好八个方向，跟马步八格呼应
+  function mineGlyph() {
+    var svg = svgEl('svg', {
+      viewBox: '0 0 24 24', 'class': 'mine', 'aria-hidden': 'true', focusable: 'false'
+    });
+    for (var q = 0; q < 8; q++) {
+      var a = Math.PI * 2 * q / 8;
+      var x1 = 12 + Math.cos(a) * 6.4, y1 = 12 + Math.sin(a) * 6.4;
+      var x2 = 12 + Math.cos(a) * 10.2, y2 = 12 + Math.sin(a) * 10.2;
+      svg.appendChild(svgEl('line', {
+        x1: x1.toFixed(2), y1: y1.toFixed(2), x2: x2.toFixed(2), y2: y2.toFixed(2),
+        stroke: '#101010', 'stroke-width': 2.2, 'stroke-linecap': 'round'
+      }));
+    }
+    svg.appendChild(svgEl('circle', { cx: 12, cy: 12, r: 6.2, fill: '#101010' }));
+    svg.appendChild(svgEl('circle', { cx: 10.1, cy: 10.1, r: 1.5, fill: '#f4f4f4' }));
+    return svg;
+  }
+
+  // 旗子：红旗面；问号旗：灰旗面 + 白色「?」
+  function flagGlyph(type) {
+    var isQuestion = (type === MS.FLAG_QUESTION);
+    var svg = svgEl('svg', {
+      viewBox: '5 2.6 13.4 18.8',
+      'class': 'flag' + (isQuestion ? ' unknown' : ''),
+      'aria-hidden': 'true',
+      focusable: 'false'
+    });
+    svg.appendChild(svgEl('line', {
+      x1: 6, y1: 3, x2: 6, y2: 21.4,
+      stroke: '#000', 'stroke-width': 2, 'stroke-linecap': 'round'
+    }));
+    var tri = {
+      points: '7,2.6 18,8 7,13.4', 'stroke-linejoin': 'round', 'stroke-width': 0.7
+    };
+    if (isQuestion) { tri.fill = '#6a6a6a'; tri.stroke = '#303030'; }
+    else { tri.fill = '#e00000'; tri.stroke = '#7a0000'; }
+    svg.appendChild(svgEl('polygon', tri));
+
+    if (isQuestion) {
+      var q = svgEl('text', {
+        x: 11.3, y: 10.6, 'font-size': 7.6,
+        'font-family': 'Tahoma,Arial,sans-serif', 'font-weight': 'bold',
+        'text-anchor': 'middle', fill: '#ffffff'
+      });
+      q.textContent = '?';
+      svg.appendChild(q);
+    }
+    return svg;
+  }
+
+  // 屏幕格子 -> 棋盘格子（方向键平移地图时只改这里的偏移量）
+  function boardIndexAt(si) {
+    var r = (si / game.cols) | 0, c = si % game.cols;
+    var br = (r + viewR) % game.rows, bc = (c + viewC) % game.cols;
+    return br * game.cols + bc;
+  }
+
+  // 棋盘格子 -> 屏幕格子（提示要用）
+  function screenIndexAt(bi) {
+    var br = (bi / game.cols) | 0, bc = bi % game.cols;
+    var r = (br - viewR + game.rows) % game.rows;
+    var c = (bc - viewC + game.cols) % game.cols;
+    return r * game.cols + c;
+  }
+
+  function isHinted(bi) {
+    return !!(hintOn && hintSet && hintSet[bi]);
+  }
+
+  function paintCell(si) {
+    var i = boardIndexAt(si);
+    var cell = game.cells[i];
+    var el = cellEls[si];
+    el.className = 'cell';
+    el.textContent = '';
+    el.title = '';
+    var over = (game.state === 'lost' || game.state === 'won');
+
+    if (cell.rev) {
+      el.classList.add('rev');
+      if (cell.mine !== MS.EMPTY) {
+        el.appendChild(mineGlyph());
+        if (i === game.hitIndex) el.classList.add('boom');
+      } else {
+        var txt = MS.numberText(cell.value);
+        if (txt) {
+          el.classList.add(MS.numberClass(cell.value));
+          el.textContent = txt;
+          if (over) el.title = '这格：马步八格里有 ' + cell.value + ' 颗雷';
+        } else if (over) {
+          el.title = '这格：马步八格里一颗雷都没有';
+        }
+      }
+    } else if (MS.isFlag(cell.flag)) {
+      if (game.state === 'lost' && cell.mine === MS.EMPTY) {
+        el.classList.add('wrong');                 // 插错位置的旗
+        el.textContent = '\u2717';
+        el.title = '这里没有雷';
+      } else {
+        el.appendChild(flagGlyph(cell.flag));
+      }
+    } else if (game.state === 'lost' && cell.mine !== MS.EMPTY) {
+      el.appendChild(mineGlyph());                 // 判负时亮出所有未插旗的雷
+    } else if (game.state === 'won' && cell.mine !== MS.EMPTY) {
+      el.appendChild(flagGlyph(MS.FLAG_MINE));     // 获胜时把剩下的雷自动插旗
+    } else if (cell.flag === MS.FLAG_QUESTION) {
+      el.appendChild(flagGlyph(MS.FLAG_QUESTION));
+      el.title = '问号旗：这里有雷但还没确认';
+    }
+
+    // 提示：中心格虚线框、马步八格橙框
+    if (isHinted(i)) {
+      el.classList.add(i === hintIdx ? 'kc' : 'kn');
+    }
+  }
+
+  function paintAll() {
+    for (var i = 0; i < game.cells.length; i++) paintCell(i);
+  }
+
+  // 图例里的马步示意（5×5：中心蓝、马步八格橙）
+  function buildKnightMap() {
+    var host = document.getElementById('lgMap');
+    if (!host) return;
+    host.innerHTML = '';
+    var cellK = 2 * 5 + 2;
+    var ring = {};
+    [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]
+      .forEach(function (o) {
+        var r = 2 + o[0], c = 2 + o[1];
+        if (r < 0 || r > 4 || c < 0 || c > 4) return;
+        ring[r * 5 + c] = true;
+      });
+    for (var i = 0; i < 25; i++) {
+      var d = document.createElement('span');
+      d.className = i === cellK ? 'kc2' : (ring[i] ? 'kn2' : 'kz');
+      host.appendChild(d);
+    }
+  }
+
+  // 图例里的图形与棋盘用同一套生成函数，避免两处不一致
+  function buildLegend() {
+    var items = [
+      ['lgMine', mineGlyph()],
+      ['lgFlag', flagGlyph(MS.FLAG_MINE)],
+      ['lgFlagQ', flagGlyph(MS.FLAG_QUESTION)]
+    ];
+    items.forEach(function (it) {
+      var host = document.getElementById(it[0]);
+      if (!host) return;
+      host.textContent = '';
+      if (host.classList) host.className = 'cell';
+      if (it[0] === 'lgMine') host.classList.add('rev');
+      host.appendChild(it[1]);
+    });
+    buildKnightMap();
+    var num = document.getElementById('lgNum');
+    if (num) { num.className = 'cell rev n3'; num.textContent = '3'; }
+    var lbl = document.getElementById('lgNumLabel');
+    if (lbl) lbl.textContent = '数字 = 马步八格里的雷数';
+    var blank = document.getElementById('lgBlank');
+    if (blank) { blank.className = 'cell rev'; blank.textContent = ''; }
+  }
+
+  /* ---------------- HUD ---------------- */
+
+  function ledText(n) {
+    var neg = n < 0;
+    var abs = Math.min(999, Math.abs(n));
+    var s = String(abs);
+    while (s.length < (neg ? 2 : 3)) s = '0' + s;
+    return (neg ? '-' : '') + s;
+  }
+
+  function updateHud() {
+    mineLed.textContent = ledText(game.state === 'won' ? 0 : game.mines - game.flagsPlaced);
+    timeLed.textContent = ledText(elapsed);
+    var safeTotal = game.rows * game.cols - game.mines;
+    status1.textContent = DIFFICULTIES[diffKey].label + ' ' + game.cols + '×' + game.rows +
+      ' · 雷 ' + game.mines + ' · 旗 ' + game.flagsPlaced +
+      ' · 已翻 ' + game.revealedCount + '/' + safeTotal;
+  }
+
+  function setStatus2(text) { status2.textContent = text; }
+
+  function startTimer() {
+    if (timerStarted) return;
+    timerStarted = true;
+    timerId = setInterval(function () {
+      elapsed = Math.min(999, elapsed + 1);
+      timeLed.textContent = ledText(elapsed);
+      saveGame();                     // 计时也一起存档
+    }, 1000);
+  }
+
+  function stopTimer() {
+    if (timerId) { clearInterval(timerId); timerId = null; }
+  }
+
+  function bestKey() { return 'ms_knight_best_v1_' + diffKey; }
+
+  function bestTime() {
+    var v = null;
+    try { v = localStorage.getItem(bestKey()); } catch (e) { v = null; }
+    return v === null ? null : parseInt(v, 10);
+  }
+
+  /* ---------------- 一局流程 ---------------- */
+
+  function newGame(key) {
+    if (key) diffKey = key;
+    stopAuto();
+    generating = false;               // 万一上一局还卡在“生成免猜地图”，这里清掉
+    viewR = 0; viewC = 0;
+    var cfg = DIFFICULTIES[diffKey];
+    game = MS.createGame({ rows: cfg.rows, cols: cfg.cols, mines: cfg.mines, wrap: wrapEnabled });
+    elapsed = 0; timerStarted = false;
+    stopTimer();
+    pendingIndex = -1;
+    buildBoard(cfg);
+    paintAll();
+    updateHud();
+    syncWrap();                       // 新局是 ready：边界按钮恢复可用
+    syncHint();
+    faceEl.textContent = '\uD83D\uDE42';
+    var best = bestTime();
+    setStatus2('左键翻开 · 右键循环 旗→问号→取消 · 单击数字快速展开' +
+      (best !== null ? ' · 最佳 ' + best + ' 秒' : ''));
+    diffBtns.forEach(function (b) { b.classList.toggle('active', b.dataset.diff === diffKey); });
+    customB.classList.toggle('active', diffKey === 'custom');
+    saveSettings();                   // 记住当前难度（含自定义参数）
+    saveGame();                       // 新局 = 清掉旧存档
+  }
+
+  /* ---------------- 自动求解 / 免猜地图 ---------------- */
+
+  function stopAuto() {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    if (autoB) autoB.textContent = '自动求解';
+  }
+
+  // 生成“免猜可解”的地图：最多试 5 秒，卡住时永远只做局部重掷（不整张重开）
+  function makeSolvable(openIndex, cfg) {
+    return MS.Solver.generateSolvable({
+      rows: cfg.rows, cols: cfg.cols, mines: cfg.mines,
+      openIndex: openIndex,
+      wrap: wrapEnabled,
+      nextSeed: function () { return seedCounter++; },
+      budgetMs: 5000,
+      nodeCap: 40000,
+      timeMs: cfg.rows * cfg.cols > 300 ? 50 : 100,
+      localRadius: 2
+    });
+  }
+
+  function afterFirstClick(msg) {
+    paintAll();
+    updateHud();
+    syncWrap();                       // 开局了：边界按钮锁住
+    faceEl.textContent = '\uD83D\uDE42';
+    startTimer();
+    setStatus2(msg);
+    generating = false;
+    saveGame();
+  }
+
+  // 首点：按“免猜”开关决定怎么造这张图
+  function firstClick(i) {
+    var cfg = DIFFICULTIES[diffKey];
+    if (!noGuess) {                                   // 普通随机地图
+      game = MS.createGame({
+        rows: cfg.rows, cols: cfg.cols, mines: cfg.mines,
+        wrap: wrapEnabled, rng: MS.makeRng(seedCounter++)
+      });
+      game.reveal(i);
+      afterFirstClick('普通随机地图（免猜已关）');
+      return true;
+    }
+    var r = makeSolvable(i, cfg);
+    if (!r.game) { generating = false; return false; }
+    game = r.game;                     // 尺寸没变，棋盘 DOM 不用重建
+    afterFirstClick(r.verified
+      ? '免猜地图 · 可一路推完（局部重掷 ' + r.localRerolls + ' 次）'
+      : '未找到免猜地图（5 秒内只做局部重掷，共 ' + r.localRerolls + ' 次），已选剩余待猜最少的' +
+        (r.bestUnsure == null ? '' : '：还需猜 ' + r.bestUnsure + ' 格'));
+    return true;
+  }
+
+  function solverStep() {
+    if (!game) return false;
+    if (game.state === 'lost' || game.state === 'won') { stopAuto(); return false; }
+    if (game.state === 'ready') {                       // 还没开点：让求解器开局
+      generating = true;
+      firstClick(game.index(game.rows >> 1, game.cols >> 1));
+      return game.state === 'playing';
+    }
+    var plan = MS.Solver.step(game, { nodeCap: 40000, timeMs: 120 });
+    if (!plan.actions.length) { setStatus2('求解：' + plan.reason); stopAuto(); return false; }
+
+    var changed = [];
+    plan.actions.forEach(function (i) {
+      if (game.state !== 'playing') return;
+      if (MS.isFlag(game.cells[i].flag)) game.setFlag(i, MS.FLAG_NONE);   // 必然安全的格子若被插旗，先撤旗
+      changed = changed.concat(game.reveal(i));
+    });
+    apply(changed);
+    if (game.state === 'playing') setStatus2('求解：' + plan.reason);
+    else setStatus2('求解：' + plan.reason + ' → ' + status2.textContent);
+    return game.state === 'playing';
+  }
+
+  function syncNoGuess() {
+    noGuessB.textContent = '免猜：' + (noGuess ? '开' : '关');
+    noGuessB.classList.toggle('active', noGuess);
+  }
+
+  function syncHint() {
+    hintB.textContent = '提示：' + (hintOn ? '开' : '关');
+    hintB.classList.toggle('active', hintOn);
+    if (!hintOn) { hintIdx = -1; hintSet = null; }
+  }
+
+  function syncWrap() {
+    wrapB.textContent = '边界：' + (wrapEnabled ? '连' : '关');
+    wrapB.classList.toggle('active', wrapEnabled);
+    wrapB.disabled = !!(game && game.state === 'playing');   // 对局进行中不许改
+  }
+
+  /* ---------------- 自定义棋盘 ---------------- */
+
+  function showCustomPanel() {
+    cRows.value = String(customCfg.rows);
+    cCols.value = String(customCfg.cols);
+    cMines.value = String(customCfg.mines);
+    customPanel.hidden = false;
+  }
+
+  function applyCustom() {
+    var rows = clampInt(parseInt(cRows.value, 10), 3, 30);
+    var cols = clampInt(parseInt(cCols.value, 10), 3, 40);
+    var mines = Math.max(0, parseInt(cMines.value, 10) | 0);
+    if (mines < 1) { setStatus2('自定义：至少要有 1 颗雷'); return; }
+    var maxMines = rows * cols - 10;                  // 首点周围要留出一片空地
+    if (mines > maxMines) {
+      setStatus2('自定义：雷太密了，' + rows + '×' + cols + ' 最多 ' + maxMines + ' 颗');
+      return;
+    }
+    customCfg = { rows: rows, cols: cols, mines: mines };
+    ensureCustomDifficulty();
+    saveSettings();
+    customPanel.hidden = true;
+    newGame('custom');
+  }
+
+  function toggleAuto() {
+    if (autoTimer) { stopAuto(); return; }
+    if (!game || game.state === 'lost' || game.state === 'won') return;
+    if (!solverStep()) return;
+    autoB.textContent = '停止';
+    autoTimer = setInterval(function () { if (!solverStep()) stopAuto(); }, 320);
+  }
+
+  function apply(changed) {
+    paintAll();                       // 地图可以被平移，直接整盘重绘最省心
+    updateHud();
+    syncWrap();                       // 对局进行中/结束后，边界按钮的可用状态跟着变
+    saveGame();                       // 顺手存档，刷新后能接着玩
+    if (game.state === 'playing') {
+      startTimer();
+      return;
+    }
+    if (game.state === 'lost') {
+      stopTimer();
+      faceEl.textContent = '\uD83D\uDE35';
+      setStatus2('踩到雷了！未插旗的雷已亮出；插错位置的旗显示为 ✗（旗插错时快速展开就会踩雷）');
+    } else if (game.state === 'won') {
+      stopTimer();
+      faceEl.textContent = '\uD83D\uDE0E';
+      var best = bestTime();
+      var msg = '恭喜通关！用时 ' + elapsed + ' 秒';
+      var t = Math.max(1, elapsed);
+      if (best === null || t < best) {
+        try { localStorage.setItem(bestKey(), String(t)); } catch (e) { /* 忽略隐私模式报错 */ }
+        msg += ' · 新纪录！';
+      } else {
+        msg += ' · 最佳 ' + best + ' 秒';
+      }
+      setStatus2(msg);
+    }
+  }
+
+  /* ---------------- 输入 ---------------- */
+
+  function indexFromEvent(e) {
+    var el = e.target && e.target.closest ? e.target.closest('.cell') : null;
+    if (!el) return -1;
+    var i = parseInt(el.dataset.i, 10);
+    return isNaN(i) ? -1 : i;                      // 屏幕下标，用前先转成棋盘下标
+  }
+
+  // 提示：把鼠标所在格的马步八格标出来
+  function setHintFromEvent(e) {
+    if (!hintOn) return;
+    var si = indexFromEvent(e);
+    if (si < 0) { hintIdx = -1; hintSet = null; return; }
+    var bi = boardIndexAt(si);
+    if (bi === hintIdx) return;
+    hintIdx = bi;
+    hintSet = {};
+    hintSet[bi] = true;
+    game.forEachKnight(bi, function (n) { hintSet[n] = true; });
+    paintAll();
+  }
+
+  function clearHint() {
+    if (hintIdx < 0 && !hintSet) return;
+    hintIdx = -1; hintSet = null;
+    paintAll();
+  }
+
+  boardEl.addEventListener('mousemove', function (e) {
+    if (!game) return;
+    setHintFromEvent(e);
+  });
+  boardEl.addEventListener('mouseleave', function () { clearHint(); });
+
+  boardEl.addEventListener('mousedown', function (e) {
+    if (e.button !== 0) return;
+    stopAuto();
+    var i = indexFromEvent(e);
+    if (i < 0 || generating || game.state === 'lost' || game.state === 'won') return;
+    pendingIndex = i;
+    faceEl.textContent = '\uD83D\uDE2E';
+  });
+
+  boardEl.addEventListener('mouseup', function (e) {
+    if (e.button !== 0) return;
+    var i = indexFromEvent(e);
+    if (pendingIndex >= 0 && i === pendingIndex && !generating) {
+      if (game.state === 'ready') {
+        // 首点：先把地图换成免猜可解的（可能要试几百张，先让状态栏画出来）
+        generating = true;
+        pendingIndex = -1;
+        setStatus2('正在生成免猜地图…');
+        var openBoardIdx = boardIndexAt(i);
+        setTimeout(function () { firstClick(openBoardIdx); }, 30);
+        return;
+      }
+      var bi = boardIndexAt(i);
+      var cell = game.cells[bi];
+      if (cell && cell.rev && cell.mine === MS.EMPTY) {
+        apply(game.chord(bi));    // 单击已翻开的数字 = 快速展开（马步八格的旗数要等于数字）
+      } else {
+        apply(game.reveal(bi));
+      }
+    }
+    pendingIndex = -1;
+    if (game.state === 'playing' || game.state === 'ready') faceEl.textContent = '\uD83D\uDE42';
+  });
+
+  window.addEventListener('mouseup', function () {
+    pendingIndex = -1;
+    if (game && (game.state === 'playing' || game.state === 'ready')) faceEl.textContent = '\uD83D\uDE42';
+  });
+
+  boardEl.addEventListener('contextmenu', function (e) {
+    e.preventDefault();
+    var i = indexFromEvent(e);
+    if (i >= 0) apply(game.toggleFlag(boardIndexAt(i)));
+  });
+
+  boardEl.addEventListener('auxclick', function (e) {
+    if (e.button !== 1) return;
+    e.preventDefault();
+    var i = indexFromEvent(e);
+    if (i >= 0) apply(game.chord(boardIndexAt(i)));
+  });
+
+  boardEl.addEventListener('dblclick', function (e) {
+    var i = indexFromEvent(e);
+    if (i >= 0) apply(game.chord(boardIndexAt(i)));
+  });
+
+  /* ---------------- 控件 ---------------- */
+
+  diffBtns.forEach(function (b) {
+    b.addEventListener('click', function () { newGame(b.dataset.diff); });
+  });
+  restartB.addEventListener('click', function () { newGame(); });
+  faceEl.addEventListener('click', function () { newGame(); });
+  stepB.addEventListener('click', function () { stopAuto(); solverStep(); });
+  autoB.addEventListener('click', toggleAuto);
+  customB.addEventListener('click', function () {
+    if (customPanel.hidden) showCustomPanel(); else customPanel.hidden = true;
+  });
+  cOk.addEventListener('click', applyCustom);
+  cCancel.addEventListener('click', function () { customPanel.hidden = true; });
+  noGuessB.addEventListener('click', function () {
+    noGuess = !noGuess;
+    syncNoGuess();
+    saveSettings();
+    if (game && game.state !== 'ready') setStatus2('免猜地图：' + (noGuess ? '开' : '关') + '（下一局生效）');
+  });
+  hintB.addEventListener('click', function () {
+    hintOn = !hintOn;
+    syncHint();
+    saveSettings();
+    paintAll();
+    setStatus2('提示：' + (hintOn ? '开（鼠标停在哪格，就圈出它的马步八格）' : '关'));
+  });
+  wrapB.addEventListener('click', function () {
+    if (game && game.state === 'playing') {          // 对局进行中：锁住，不许改
+      setStatus2('对局进行中不能改「边界」，先重开（F2）或打完这一局');
+      return;
+    }
+    wrapEnabled = !wrapEnabled;
+    syncWrap();
+    saveSettings();
+    viewR = 0; viewC = 0;                 // 换边界模式就把地图摆回原位，免得留下误导性的接缝
+    paintAll();
+    if (game && game.state !== 'ready') setStatus2('边界相连：' + (wrapEnabled ? '开' : '关') + '（下一局生效）');
+  });
+
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'F2' || e.key === 'r' || e.key === 'R') { e.preventDefault(); newGame(); return; }
+    // 方向键：把地图朝那个方向平移一格（只在“边界相连”时有意义，
+    // 否则平移会把两条不相连的边硬拼在一起，看着像“旁边的雷不算数”）
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    if (!wrapEnabled) {
+      setStatus2('边界未相连（边界：关）时地图不能平移 —— 打开“边界”就能平移了');
+      return;
+    }
+    if (e.key === 'ArrowUp') viewR = (viewR + 1) % game.rows;
+    else if (e.key === 'ArrowDown') viewR = (viewR - 1 + game.rows) % game.rows;
+    else if (e.key === 'ArrowLeft') viewC = (viewC + 1) % game.cols;
+    else viewC = (viewC - 1 + game.cols) % game.cols;
+    hintIdx = -1; hintSet = null;
+    paintAll();
+  });
+
+  loadSettings();
+  ensureCustomDifficulty();
+  buildLegend();
+  syncNoGuess();
+  syncHint();
+  syncWrap();
+  if (!restoreGame()) newGame();          // 能接上刷新前的对局就接上
+  window.addEventListener('beforeunload', saveGame);
+  window.addEventListener('pagehide', saveGame);
+})();
+</script>
+</body>
+</html>
