@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>aliceliddell.top</title>
+<meta name="description" content="小游戏集散地 —— 总统模拟器、马步扫雷。">
+<meta property="og:title" content="aliceliddell.top">
+<meta property="og:description" content="小游戏集散地 —— 总统模拟器、马步扫雷。">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23F6E7FC'/><rect x='4' y='4' width='24' height='24' fill='none' stroke='%238414D0' stroke-width='3'/><rect x='9' y='9' width='14' height='14' fill='%23EB8CEA'/></svg>">
+<style>
+/* ==========================================================================
+   「重度依赖」raincandy —— 总统模拟器的隐藏主题
+   以下色号与组件样式取自 president-sim.html 的 body[data-era="rc"] 实机采样
+   ========================================================================== */
+:root{
+  --rc-paper:#FCF7FD;      /* 窗口纸面 */
+  --rc-white:#FDFDFD;      /* 纯白 */
+  --rc-desktop-a:#F6E7FC;  /* 桌面格纹 A */
+  --rc-desktop-b:#F7DEFC;  /* 桌面格纹 B */
+  --rc-desktop-c:#F4DBF9;  /* 桌面格纹 C */
+  --rc-desktop-d:#EDC9ED;  /* 桌面格纹 D */
+  --rc-pink:#F9D7EF;       /* 列表高亮粉 */
+  --rc-pink-hot:#EB8CEA;   /* 强调粉 */
+  --rc-violet:#8414D0;     /* 主紫 */
+  --rc-violet-2:#5945B6;   /* 边框紫 */
+  --rc-violet-3:#876AC6;   /* 次级紫 */
+  --rc-violet-lt:#B79BDF;  /* 浅紫 */
+  --rc-cyan:#4AE1FC;       /* 内层青 */
+  --rc-ink:#1A1227;        /* 正文近黑紫 */
+  --rc-lav:#EBD2F9;        /* 标题栏淡紫 */
+  --rc-font:"DinkieBitmap","PixelMplus12","Zpix","MS Gothic",ui-monospace,"Microsoft YaHei",monospace;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+
+body{
+  min-height:100vh;
+  color:var(--rc-ink);
+  font-family:var(--rc-font);
+  font-size:13px;
+  line-height:1.8;
+  -webkit-font-smoothing:none;
+  /* 桌面棋盘格 */
+  background-color:var(--rc-desktop-a);
+  background-image:
+    linear-gradient(45deg,var(--rc-desktop-c) 25%,transparent 25%,transparent 75%,var(--rc-desktop-c) 75%,var(--rc-desktop-c)),
+    linear-gradient(45deg,var(--rc-desktop-c) 25%,transparent 25%,transparent 75%,var(--rc-desktop-c) 75%,var(--rc-desktop-c));
+  background-size:40px 40px;
+  background-position:0 0,20px 20px;
+}
+
+/* 紫/青径向光晕叠加（raincandy ::before 原样保留） */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:9996;
+  background:
+    radial-gradient(120% 80% at 50% 120%,rgba(120,60,180,.18),transparent 60%),
+    radial-gradient(120% 80% at 50% -20%,rgba(120,200,255,.20),transparent 60%);
+}
+
+::selection{background:var(--rc-pink-hot);color:#fff}
+
+/* 滚动条 —— raincandy 同款 */
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:var(--rc-lav)}
+::-webkit-scrollbar-thumb{background:var(--rc-violet-lt);border:1px solid var(--rc-violet)}
+
+/* ---------- 顶栏 ---------- */
+.topline{
+  position:sticky;top:0;z-index:50;
+  display:flex;flex-wrap:nowrap;align-items:center;gap:8px;white-space:nowrap;
+  background:var(--rc-lav);
+  border-bottom:2px solid var(--rc-violet-2);
+  box-shadow:0 2px 0 rgba(107,91,196,.35);
+  padding:7px 14px;
+}
+.topline>*{flex:0 0 auto}
+.brand{
+  color:var(--rc-violet);letter-spacing:1.5px;font-size:14px;
+  display:flex;align-items:center;
+}
+.brand::before{
+  content:"";display:inline-block;width:10px;height:10px;
+  background:var(--rc-violet);margin-right:6px;vertical-align:-1px;
+}
+.topline .spacer{margin-left:auto}
+.pill{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:1px 9px;font-size:11px;
+  border:1px solid var(--rc-violet-2);
+  background:var(--rc-white);color:var(--rc-violet);
+}
+
+/* ---------- 主体 ---------- */
+.wrap{max-width:1040px;margin:0 auto;padding:26px 14px 60px}
+
+.hero{padding:10px 2px 26px}
+.hero h1{
+  margin:0 0 10px;
+  font-size:clamp(26px,5.2vw,42px);
+  line-height:1.25;
+  letter-spacing:3px;
+  color:var(--rc-violet);
+  text-shadow:3px 3px 0 var(--rc-cyan);
+  font-weight:400;
+}
+.hero p{
+  margin:0;max-width:62ch;
+  color:var(--rc-violet-2);font-size:12.5px;letter-spacing:.5px;
+}
+.hero .hint{
+  margin-top:14px;display:inline-block;
+  padding:5px 10px;
+  border:1px dashed var(--rc-pink-hot);
+  background:var(--rc-white);
+  color:var(--rc-violet-2);font-size:11.5px;
+}
+.hero .hint b{color:var(--rc-pink-hot);letter-spacing:1px}
+
+/* ---------- 游戏卡片（复刻 raincandy 窗口） ---------- */
+.games{
+  list-style:none;margin:0;padding:0;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+  gap:22px;
+}
+
+.card{
+  position:relative;
+  background:var(--rc-white);
+  border:2px solid var(--rc-violet-2);
+  padding:38px 12px 12px;
+  box-shadow:0 0 0 1px var(--rc-cyan) inset, 3px 3px 0 rgba(132,20,208,.30);
+}
+
+/* 标题条 */
+.card>h3{
+  position:absolute;left:-2px;right:-2px;top:-2px;
+  margin:0;padding:4px 8px;
+  display:flex;align-items:center;gap:7px;
+  background:var(--rc-lav);color:var(--rc-ink);
+  border-bottom:1px solid var(--rc-violet);
+  font-size:12.5px;font-weight:400;letter-spacing:.5px;
+}
+.card>h3::before{
+  content:"";width:9px;height:9px;background:var(--rc-violet);flex:none;
+}
+.card>h3::after{
+  content:"□ ×";margin-left:auto;color:var(--rc-violet);
+  font-size:11px;letter-spacing:3px;
+}
+
+.card-body{display:flex;flex-direction:column;height:100%}
+
+.icon{
+  width:52px;height:52px;flex:none;
+  display:grid;place-items:center;
+  border:2px solid var(--rc-violet-2);
+  background:var(--rc-paper);
+  color:var(--rc-violet);
+  font-size:25px;line-height:1;
+  margin-bottom:10px;
+  box-shadow:2px 2px 0 rgba(132,20,208,.22);
+}
+
+.desc{
+  margin:0 0 12px;
+  font-size:12.5px;line-height:1.85;
+  color:var(--rc-ink);
+}
+
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+.tag{
+  display:inline-block;padding:1px 6px;
+  font-size:11px;
+  border:1px solid var(--rc-violet-2);
+  background:var(--rc-white);color:var(--rc-ink);
+}
+.tag.hot{background:var(--rc-pink);border-color:var(--rc-pink-hot)}
+
+.meta{
+  font-size:11px;color:var(--rc-violet-3);
+  letter-spacing:.5px;margin-bottom:14px;
+}
+.meta b{color:var(--rc-violet-2);font-weight:400}
+
+/* ---------- 按钮 ---------- */
+.actions{margin-top:auto;display:flex;gap:10px;flex-wrap:wrap}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:5px 12px;
+  font-family:var(--rc-font);font-size:12.5px;
+  letter-spacing:.5px;text-decoration:none;cursor:pointer;
+  background:var(--rc-white);color:var(--rc-ink);
+  border:1px dashed var(--rc-pink-hot);
+  box-shadow:none;
+  transition:.12s;
+}
+.btn::before{
+  content:"";display:inline-block;width:8px;height:8px;
+  background:var(--rc-violet);
+}
+.btn:hover{background:var(--rc-pink);border-color:var(--rc-pink)}
+
+/* 主按钮：粉底 + 紫硬边框 + 4px 硬阴影 */
+.btn.gold{
+  background:var(--rc-pink-hot);
+  color:#fff;
+  border:3px solid var(--rc-violet-2);
+  box-shadow:4px 4px 0 var(--rc-violet);
+  letter-spacing:2px;
+  padding:6px 18px;
+  font-size:13px;
+}
+.btn.gold::before{display:none;content:none}
+.btn.gold:hover{
+  background:var(--rc-white);color:var(--rc-violet);
+  border-color:var(--rc-violet);
+  box-shadow:4px 4px 0 var(--rc-cyan);
+}
+.btn.gold:active{
+  transform:translate(3px,3px);
+  box-shadow:1px 1px 0 var(--rc-violet);
+}
+
+.card:hover .btn.gold{box-shadow:4px 4px 0 var(--rc-cyan)}
+
+/* ---------- 小节标题 ---------- */
+.sechead{
+  color:var(--rc-violet);letter-spacing:1px;
+  border-bottom:1px dashed var(--rc-pink-hot);
+  padding-bottom:4px;margin:34px 0 16px;
+  font-size:12px;
+}
+
+/* ---------- 页脚状态栏 ---------- */
+.statusbar{
+  position:relative;z-index:2;
+  display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+  padding:7px 14px;
+  background:var(--rc-lav);
+  border-top:1px solid var(--rc-violet);
+  color:var(--rc-violet);
+  font-size:11px;letter-spacing:.5px;
+}
+.statusbar .spacer{margin-left:auto}
+.statusbar b{color:var(--rc-pink-hot);font-weight:400}
+
+/* 窄屏 */
+@media (max-width:560px){
+  .wrap{padding:18px 10px 48px}
+  .hero{padding-bottom:20px}
+  .hero h1{letter-spacing:2px;text-shadow:2px 2px 0 var(--rc-cyan)}
+  .games{gap:16px}
+}
+</style>
+</head>
+<body>
+
+<header class="topline">
+  <span class="brand">aliceliddell.top</span>
+  <span class="spacer"></span>
+  <span class="pill">2 个作品</span>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <h1>两台小机器</h1>
+    <p>
+      一个在椭圆办公室里处理民调与法案，一个在棋盘上按马步数雷。
+      都做成单个 HTML 文件，双击就能玩，不需要联网装任何东西。
+    </p>
+    <div class="hint">本站配色取自 <b>raincandy</b>「重度依赖」——总统模拟器里的隐藏主题</div>
+  </section>
+
+  <ul class="games">
+
+    <li class="card">
+      <h3>总统模拟器</h3>
+      <div class="card-body">
+        <div class="icon">🏛</div>
+        <p class="desc">
+          从 2000 年一路推到未来的白宫模拟器。19 个开局剧本可挑年份与身份，
+          选民结构按族群、宗教、学历、阶层、产业、城乡六个维度加权，
+          危机按真实历史时间线触发，法案要过委员会也要过表决。
+        </p>
+        <div class="tags">
+          <span class="tag hot">策略</span>
+          <span class="tag">政治</span>
+          <span class="tag">长线</span>
+          <span class="tag">单文件</span>
+        </div>
+        <div class="meta"><b>v0.2.2</b> · 3.9 MB · 支持存档</div>
+        <div class="actions">
+          <a class="btn gold" href="/president-sim/">进入 →</a>
+        </div>
+      </div>
+    </li>
+
+    <li class="card">
+      <h3>马步扫雷</h3>
+      <div class="card-body">
+        <div class="icon">♘</div>
+        <p class="desc">
+          扫雷的棋盘变种：每一格的数字只统计「马步八格」里的雷数 —— 也就是
+          国际象棋里马一步能跳到的八个位置。紧贴着的上下左右与四个对角，
+          跟这一格的数字完全无关。支持环面边界与快速展开。
+        </p>
+        <div class="tags">
+          <span class="tag hot">益智</span>
+          <span class="tag">变种</span>
+          <span class="tag">轻量</span>
+          <span class="tag">单文件</span>
+        </div>
+        <div class="meta"><b>75 KB</b> · 经典 / 环面两种边界 · 自动求解</div>
+        <div class="actions">
+          <a class="btn gold" href="/mine-knight/">进入 →</a>
+        </div>
+      </div>
+    </li>
+
+  </ul>
+
+  <h2 class="sechead">说明</h2>
+  <ul class="games" style="grid-template-columns:1fr">
+    <li class="card">
+      <h3>关于这个站</h3>
+      <div class="card-body">
+        <p class="desc" style="margin-bottom:0">
+          页面与游戏都是纯静态文件，托管在 Cloudflare Pages 上，改完后推送即自动发布。
+          游戏全部自包含，没有外部依赖、没有统计脚本、没有账号系统 ——
+          打开一个链接就是全部。
+        </p>
+      </div>
+    </li>
+  </ul>
+
+</main>
+
+<footer class="statusbar">
+  <span>© <span id="y">2026</span> aliceliddell.top</span>
+  <span class="spacer"></span>
+  <span>配色 · <b>raincandy / 重度依赖</b></span>
+</footer>
+
+<script>
+  document.getElementById('y').textContent = new Date().getFullYear();
+</script>
+
+</body>
+</html>
