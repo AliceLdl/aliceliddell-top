@@ -101,6 +101,13 @@
   /* 提示：鼠标所在格的马步八格描边（.kn），中心格虚线框（.kc） */
   .cell.kc{outline:2px dashed #0040c0;outline-offset:-2px}
   .cell.kn{outline:2px solid #d08000;outline-offset:-2px}
+  /* 描边会压住格子边缘的浮雕，所以给**还没翻开**的格子再加一层内阴影：
+     有阴影 = 还没翻开，没有阴影 = 已经翻开。这样即使边框盖住边缘也能一眼分辨。 */
+  .cell.kn:not(.rev),
+  .cell.kc:not(.rev){
+    box-shadow:inset -2px -2px 0 var(--shadow),inset 2px 2px 0 var(--light),
+               inset 0 0 0 999px rgba(0,0,0,.12),inset 0 0 10px rgba(0,0,0,.42);
+  }
   .cell.n1{color:#0000ff}
   .cell.n2{color:#008000}
   .cell.n3{color:#ff0000}
