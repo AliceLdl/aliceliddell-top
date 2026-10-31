@@ -13,77 +13,100 @@
   video{
     display:block;width:100%;height:100%;
     object-fit:contain;background:#000;
+    opacity:1;transition:opacity .18s ease;
   }
+  /* 自动播放未被允许时，视频完全不显示 */
+  video.hide{opacity:0;pointer-events:none}
 
-  /* 仅当处于静音播放时，右上角出现的小提示；绝不遮挡画面 */
-  #sound{
-    position:fixed;top:14px;right:14px;z-index:10;
-    display:none;align-items:center;gap:8px;
-    padding:9px 15px;cursor:pointer;
-    font:inherit;font-size:13px;letter-spacing:1px;
+  /* 「点我」入口 */
+  #gate{
+    position:fixed;inset:0;display:none;place-items:center;
+    background:#0b0710;z-index:10;
+  }
+  #gate.on{display:grid}
+
+  #go{
+    font:inherit;font-size:19px;letter-spacing:6px;
+    padding:20px 52px 20px 58px;cursor:pointer;
     color:#fff;background:#EB8CEA;
     border:3px solid #5945B6;border-radius:0;
-    box-shadow:4px 4px 0 #8414D0;
-    transition:background .12s,color .12s,box-shadow .12s;
+    box-shadow:6px 6px 0 #8414D0;
+    transition:background .12s,color .12s,box-shadow .12s,transform .12s;
   }
-  #sound.on{display:flex}
-  #sound:hover{background:#fff;color:#8414D0;box-shadow:4px 4px 0 #4AE1FC}
-  #sound:active{transform:translate(2px,2px);box-shadow:1px 1px 0 #8414D0}
+  #go:hover{background:#fff;color:#8414D0;box-shadow:6px 6px 0 #4AE1FC}
+  #go:active{transform:translate(4px,4px);box-shadow:1px 1px 0 #8414D0}
+  #go:focus-visible{outline:3px solid #4AE1FC;outline-offset:4px}
 </style>
 </head>
 <body>
 
-<video id="v" src="never-gonna-give-you-up.mp4" controls playsinline preload="auto"></video>
-<button id="sound" type="button">🔊 开启声音</button>
+<video id="v" class="hide" src="never-gonna-give-you-up.mp4" controls playsinline preload="auto"></video>
+
+<div id="gate"><button id="go" type="button">点我</button></div>
 
 <script>
 (function(){
-  var v   = document.getElementById('v');
-  var btn = document.getElementById('sound');
+  var v    = document.getElementById('v');
+  var gate = document.getElementById('gate');
+  var go   = document.getElementById('go');
+  var settled = false;
 
-  // 提示只在「正在播放 且 静音」时出现
-  function sync(){
-    if (!v.paused && v.muted) {
-      btn.textContent = '🔊 开启声音';
-      btn.classList.add('on');
-    } else {
-      btn.classList.remove('on');
-    }
+  function playOk(){
+    // 有声播放成功：显示视频，收掉按钮
+    settled = true;
+    v.classList.remove('hide');
+    gate.classList.remove('on');
   }
 
-  // 优先有声自动播放；被策略拦截则静音播放
+  function askUser(){
+    // 浏览器拦截了有声播放：不显示视频，只留「点我」
+    settled = true;
+    v.pause();
+    v.classList.add('hide');
+    gate.classList.add('on');
+    try { go.focus({ preventScroll: true }); } catch(e) {}
+  }
+
+  // 先尝试有声自动播放
   var p = v.play();
-  if (p && p.catch) {
-    p.catch(function(){
-      v.muted = true;
-      var p2 = v.play();
-      if (p2 && p2.catch) {
-        p2.catch(function(){
-          // 连静音播放都被拒：只能等用户点一下
-          btn.textContent = '▶ 播放';
-          btn.classList.add('on');
-        });
-      }
-    });
+  if (p && p.then) {
+    p.then(playOk).catch(askUser);
+  } else {
+    // 老浏览器返回 undefined：用事件确认是否真的播起来了
+    v.addEventListener('playing', function(){ if (!v.muted) playOk(); }, { once: true });
   }
 
-  btn.addEventListener('click', function(){
-    if (v.paused) {
-      v.muted = false;
-      v.volume = 1;
-      var p3 = v.play();
-      if (p3 && p3.catch) p3.catch(function(){});
-    } else {
-      v.muted = false;
-      v.volume = 1;
+  // 兜底：2.5 秒内没播起来就当被拦截
+  setTimeout(function(){
+    if (!settled) {
+      if (v.paused) askUser();
+      else playOk();
     }
-    sync();
+  }, 2500);
+
+  // 用户点击「点我」→ 有声播放
+  go.addEventListener('click', function(){
+    v.classList.remove('hide');
+    gate.classList.remove('on');
+    v.muted = false;
+    v.volume = 1;
+    var p2 = v.play();
+    if (p2 && p2.catch) {
+      p2.catch(function(){
+        // 极端情况（无可用音频设备等），把按钮还给用户
+        v.classList.add('hide');
+        gate.classList.add('on');
+      });
+    }
   });
 
-  v.addEventListener('playing', sync);
-  v.addEventListener('pause', function(){ btn.classList.remove('on'); });
-  v.addEventListener('volumechange', sync);
-  v.addEventListener('ended', function(){ btn.classList.remove('on'); });
+  // 播放真的开始时，确保视频可见
+  v.addEventListener('playing', function(){
+    if (!v.muted) {
+      v.classList.remove('hide');
+      gate.classList.remove('on');
+    }
+  });
 })();
 </script>
 
