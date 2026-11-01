@@ -164,7 +164,7 @@ h1{
 
 /* ---------- Webcam 浮窗（还原参考图的多层边框） ---------- */
 .cam{
-  position:fixed;right:22px;bottom:22px;z-index:80;
+  position:fixed;right:22px;top:64px;z-index:80;
   width:380px;
   background:#F8DFF1;
   /* 内层紫蓝线 */
@@ -253,7 +253,7 @@ h1{
 .cam.min .cam-view,.cam.min .cam-foot{display:none}
 .cam.max{width:520px}
 .cam.max .cam-view{height:310px}@media (max-width:600px){
-  .cam{width:264px;right:8px;bottom:8px}
+  .cam{width:264px;right:8px;top:52px}
   .cam-bar{height:19px;font-size:10px}
   .cam-view{height:157px}
   .cam-foot{height:10px}
@@ -319,6 +319,8 @@ console.log(
     idx = idx % 6 + 1;
     face.src = 'img/alice/face' + idx + '.png';
   });
+
+  
 
   /* 拖动（Pointer Events，鼠标与触摸通用） */
   var drag = false, sx = 0, sy = 0, ox = 0, oy = 0;
