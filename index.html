@@ -38,6 +38,8 @@ html,body{margin:0;padding:0}
 
 body{
   min-height:100vh;
+  -webkit-user-select:none;
+  user-select:none;
   color:var(--rc-ink);
   font-family:var(--rc-font);
   font-size:13px;
@@ -177,6 +179,10 @@ h1{
   user-select:none;-webkit-user-select:none;
   touch-action:none;
   font-family:var(--rc-font);
+}
+.cam.fly{
+  transition:left .34s cubic-bezier(.22,.61,.36,1),
+             top  .34s cubic-bezier(.22,.61,.36,1);
 }
 .cam-bar{
   display:flex;align-items:center;gap:7px;
@@ -326,6 +332,7 @@ console.log(
   var drag = false, sx = 0, sy = 0, ox = 0, oy = 0;
   bar.addEventListener('pointerdown', function(e){
     if (e.target.closest('.cam-btns')) return;   /* 按钮区不触发拖动 */
+    cam.classList.remove('fly');                 /* 拖动时不要过渡动画 */
     var r = cam.getBoundingClientRect();
     cam.style.left   = r.left + 'px';
     cam.style.top    = r.top + 'px';
@@ -370,6 +377,22 @@ console.log(
       cam.classList.toggle('max');
       cam.classList.remove('min');
     }
+  });
+  /* 双击页面任意位置：浮窗平滑滑到那里（双击浮窗内部不触发） */
+  document.addEventListener('dblclick', function(e){
+    if (e.target.closest('.cam')) return;
+    var w = cam.offsetWidth, h = cam.offsetHeight;
+    var tx = e.clientX - w / 2;
+    var ty = e.clientY - h / 2;
+    tx = Math.max(0, Math.min(window.innerWidth  - w, tx));
+    ty = Math.max(0, Math.min(window.innerHeight - h, ty));
+    cam.classList.add('fly');
+    cam.style.left   = tx + 'px';
+    cam.style.top    = ty + 'px';
+    cam.style.right  = 'auto';
+    cam.style.bottom = 'auto';
+    clearTimeout(cam._flyTimer);
+    cam._flyTimer = setTimeout(function(){ cam.classList.remove('fly'); }, 420);
   });
   /* 窗口尺寸变化时，把浮窗拉回可视区域 */
   window.addEventListener('resize', function(){
