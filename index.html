@@ -162,53 +162,66 @@ h1{
   .game .glyph{font-size:32px}
 }
 
-/* ---------- Webcam 浮窗 ---------- */
+/* ---------- Webcam 浮窗（参考图配色与比例） ---------- */
 .cam{
-  position:fixed;right:18px;bottom:18px;z-index:80;
-  width:220px;
-  background:#F9D7EF;
-  border:2px solid var(--rc-violet-2);
-  box-shadow:0 0 0 1px var(--rc-cyan) inset, 4px 4px 0 rgba(132,20,208,.35);
+  position:fixed;right:20px;bottom:20px;z-index:80;
+  width:320px;
+  background:#F8DFF1;
+  border:3px solid #4825C5;
+  box-shadow:5px 5px 0 rgba(72,37,197,.32);
   user-select:none;-webkit-user-select:none;
   touch-action:none;
 }
 .cam-bar{
   display:flex;align-items:center;gap:6px;
-  height:24px;padding:0 7px;
-  background:var(--rc-lav);
-  border-bottom:1px solid var(--rc-violet);
+  height:22px;padding:0 7px;
+  background:#E2E2E1;
+  border-top:3px solid #4825C5;
+  border-bottom:3px solid #4825C5;
   cursor:grab;
-  font-size:11px;letter-spacing:1px;color:var(--rc-violet);
+  font-size:10px;letter-spacing:2px;color:#4825C5;
+  box-sizing:border-box;
 }
 .cam-bar:active{cursor:grabbing}
-.cam-bar::before{
-  content:"";width:7px;height:7px;border-radius:50%;
-  background:#E0399A;box-shadow:0 0 0 2px rgba(224,57,154,.25);
-  animation:camBlink 1.6s steps(1,end) infinite;
+.cam-ico{
+  width:10px;height:10px;flex:none;background:#4825C5;
 }
-@keyframes camBlink{0%,49%{opacity:1}50%,100%{opacity:.2}}
-.cam-bar .rec{margin-left:auto;color:var(--rc-violet-2);font-size:10px;letter-spacing:2px}
+.cam-bar::after{
+  content:"\25A1 \00D7";margin-left:auto;
+  color:#4825C5;font-size:10px;letter-spacing:3px;
+}
 .cam-view{
-  display:grid;place-items:center;
-  background:radial-gradient(120% 90% at 50% 0%,#FDEFFA 0%,#F9D7EF 55%,#EFC0E6 100%);
-  overflow:hidden;
+  position:relative;height:187px;
+  background:#F8DFF1;
+  background-image:
+    radial-gradient(circle at 16% 14%, #BFABE8 0 2px, transparent 2px),
+    radial-gradient(circle at 86% 20%, #C4DAFA 0 2px, transparent 2px),
+    radial-gradient(circle at 28% 80%, #D7C4EA 0 2px, transparent 2px),
+    radial-gradient(circle at 90% 86%, #E9C5EA 0 2px, transparent 2px),
+    radial-gradient(circle at 64% 10%, #D7C4EA 0 1px, transparent 1px),
+    radial-gradient(circle at 9% 56%, #C4DAFA 0 1px, transparent 1px);
+  overflow:hidden;line-height:0;
 }
 .cam-view img{
-  display:block;width:100%;height:auto;
-  cursor:pointer;
-  transition:transform .1s;
+  position:relative;z-index:1;
+  display:block;width:100%;height:100%;
+  object-fit:cover;object-position:center top;
+  cursor:pointer;transition:transform .1s;
   -webkit-user-drag:none;
 }
-.cam-view img:active{transform:scale(.97)}
-.cam-hint{
-  padding:4px 7px;
-  background:var(--rc-lav);
-  border-top:1px solid var(--rc-violet);
-  font-size:10px;line-height:1.5;color:var(--rc-violet);text-align:center;
-  letter-spacing:.5px;
+.cam-view img:active{transform:scale(.985)}
+.cam-foot{
+  height:11px;line-height:11px;
+  background:#E2E2E1;
+  border-top:2px solid #4825C5;
+  color:#4825C5;font-size:8px;text-align:center;
+  letter-spacing:.5px;white-space:nowrap;overflow:hidden;
 }
-@media (max-width:520px){
-  .cam{width:168px;right:10px;bottom:10px}
+@media (max-width:560px){
+  .cam{width:224px;right:8px;bottom:8px}
+  .cam-bar{height:18px;font-size:9px}
+  .cam-view{height:131px}
+  .cam-foot{height:10px;line-height:10px;font-size:7px}
 }
 </style>
 </head>
@@ -238,11 +251,11 @@ h1{
 </main>
 <!-- Webcam 浮窗 -->
 <div class="cam" id="cam">
-  <div class="cam-bar">CAM-01<span class="rec">REC</span></div>
+  <div class="cam-bar"><span class="cam-ico"></span>Webcam</div>
   <div class="cam-view">
     <img id="camFace" src="img/alice/face1.png" alt="Alice" draggable="false">
   </div>
-  <div class="cam-hint" id="camHint">点我换表情 · 拖标题栏移动</div>
+  <div class="cam-foot">点我换表情 · 拖我移动</div>
 </div>
 
 <script>
