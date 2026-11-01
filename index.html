@@ -130,8 +130,8 @@ h1{
   content:"";width:8px;height:8px;background:var(--rc-violet);flex:none;
 }
 .game .bar::after{
-  content:"\2212 \25A1 \00D7";margin-left:auto;color:var(--rc-violet);
-  font-size:10px;letter-spacing:2px;
+  content:"\2212  \25A1  \00D7";margin-left:auto;color:var(--rc-violet);
+  font-size:10px;letter-spacing:5px;
 }
 .game .glyph{
   display:grid;place-items:center;
@@ -195,18 +195,39 @@ h1{
 }
 .cam-btns{margin-left:auto;display:flex;gap:4px;align-items:center}
 .cam-btns b{
-  width:15px;height:13px;
+  width:16px;height:14px;
   display:grid;place-items:center;
   background:#E2E2E1;
   border:1px solid #4825C5;
-  color:#4825C5;
-  font:normal 10px/1 var(--rc-font);
-  cursor:pointer;user-select:none;
   box-sizing:border-box;
-  transition:background .1s,color .1s;
+  cursor:pointer;user-select:none;
+  transition:background .1s;
+  --ink:#4825C5;
 }
-.cam-btns b:hover{background:#4825C5;color:#E2E2E1}
-.cam-btns b:active{background:#3a1c9e;color:#fff}
+.cam-btns b:hover{background:#4825C5;--ink:#E2E2E1}
+.cam-btns b:active{background:#3a1c9e;--ink:#ffffff}
+.cam-btns b i{display:block;position:relative;font-style:normal}
+/* 最小化：一横 */
+.cam-btns b[data-k="min"] i{
+  width:8px;height:2px;background:var(--ink);
+}
+/* 全屏：方框 */
+.cam-btns b[data-k="max"] i{
+  width:8px;height:8px;
+  border:2px solid var(--ink);
+  box-sizing:border-box;
+}
+/* 关闭：叉 */
+.cam-btns b[data-k="close"] i{
+  width:9px;height:9px;
+}
+.cam-btns b[data-k="close"] i::before,
+.cam-btns b[data-k="close"] i::after{
+  content:"";position:absolute;top:50%;left:50%;
+  width:10px;height:2px;background:var(--ink);
+}
+.cam-btns b[data-k="close"] i::before{transform:translate(-50%,-50%) rotate(45deg)}
+.cam-btns b[data-k="close"] i::after{transform:translate(-50%,-50%) rotate(-45deg)}
 .cam-view{
   position:relative;height:226px;
   background:radial-gradient(125% 105% at 50% -8%,
@@ -265,7 +286,7 @@ h1{
 </main>
 <!-- Webcam 浮窗 -->
 <div class="cam" id="cam">
-  <div class="cam-bar"><span class="cam-ico"></span>Webcam<span class="cam-btns"><b data-k="min">-</b><b data-k="max">&#9633;</b><b data-k="close">&#215;</b></span></div>
+  <div class="cam-bar"><span class="cam-ico"></span>Webcam<span class="cam-btns"><b data-k="min"><i></i></b><b data-k="max"><i></i></b><b data-k="close"><i></i></b></span></div>
   <div class="cam-view">
     <img id="camFace" src="img/alice/face1.png" alt="Alice" draggable="false">
   </div>
