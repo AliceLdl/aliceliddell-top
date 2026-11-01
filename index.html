@@ -130,7 +130,7 @@ h1{
   content:"";width:8px;height:8px;background:var(--rc-violet);flex:none;
 }
 .game .bar::after{
-  content:"□ ×";margin-left:auto;color:var(--rc-violet);
+  content:"\2212 \25A1 \00D7";margin-left:auto;color:var(--rc-violet);
   font-size:10px;letter-spacing:2px;
 }
 .game .glyph{
@@ -193,21 +193,27 @@ h1{
 .cam-ico{
   width:11px;height:11px;flex:none;background:#4825C5;
 }
-.cam-bar::after{
-  content:"\25A1 \00D7";margin-left:auto;
-  color:#4825C5;font-size:11px;letter-spacing:3px;
-  font-family:var(--rc-font);
+.cam-btns{margin-left:auto;display:flex;gap:4px;align-items:center}
+.cam-btns b{
+  width:15px;height:13px;
+  display:grid;place-items:center;
+  background:#E2E2E1;
+  border:1px solid #4825C5;
+  color:#4825C5;
+  font:normal 10px/1 var(--rc-font);
+  cursor:pointer;user-select:none;
+  box-sizing:border-box;
+  transition:background .1s,color .1s;
 }
+.cam-btns b:hover{background:#4825C5;color:#E2E2E1}
+.cam-btns b:active{background:#3a1c9e;color:#fff}
 .cam-view{
   position:relative;height:226px;
-  background:#F8DFF1;
-  background-image:
-    radial-gradient(circle at 15% 13%, #BFABE8 0 2px, transparent 2px),
-    radial-gradient(circle at 87% 19%, #C4DAFA 0 2px, transparent 2px),
-    radial-gradient(circle at 27% 81%, #D7C4EA 0 2px, transparent 2px),
-    radial-gradient(circle at 91% 87%, #E9C5EA 0 2px, transparent 2px),
-    radial-gradient(circle at 64% 9%, #D7C4EA 0 1px, transparent 1px),
-    radial-gradient(circle at 8% 55%, #C4DAFA 0 1px, transparent 1px);
+  background:radial-gradient(125% 105% at 50% -8%,
+    #FDEFFA 0%,
+    #F8DFF1 42%,
+    #EED3EE 74%,
+    #E4C2E9 100%);
   overflow:hidden;line-height:0;
 }
 .cam-view img{
@@ -223,7 +229,9 @@ h1{
   background:#E2E2E1;
   border-top:2px solid #4825C5;
 }
-@media (max-width:600px){
+.cam.min .cam-view,.cam.min .cam-foot{display:none}
+.cam.max{width:520px}
+.cam.max .cam-view{height:310px}@media (max-width:600px){
   .cam{width:264px;right:8px;bottom:8px}
   .cam-bar{height:19px;font-size:10px}
   .cam-view{height:157px}
@@ -257,7 +265,7 @@ h1{
 </main>
 <!-- Webcam 浮窗 -->
 <div class="cam" id="cam">
-  <div class="cam-bar"><span class="cam-ico"></span>Webcam</div>
+  <div class="cam-bar"><span class="cam-ico"></span>Webcam<span class="cam-btns"><b data-k="min">-</b><b data-k="max">&#9633;</b><b data-k="close">&#215;</b></span></div>
   <div class="cam-view">
     <img id="camFace" src="img/alice/face1.png" alt="Alice" draggable="false">
   </div>
@@ -294,6 +302,7 @@ console.log(
   /* 拖动（Pointer Events，鼠标与触摸通用） */
   var drag = false, sx = 0, sy = 0, ox = 0, oy = 0;
   bar.addEventListener('pointerdown', function(e){
+    if (e.target.closest('.cam-btns')) return;   /* 按钮区不触发拖动 */
     var r = cam.getBoundingClientRect();
     cam.style.left   = r.left + 'px';
     cam.style.top    = r.top + 'px';
@@ -322,6 +331,23 @@ console.log(
   bar.addEventListener('pointerup', endDrag);
   bar.addEventListener('pointercancel', endDrag);
 
+  /* 三键：最小化 / 全屏 / 关闭 */
+  var btns = cam.querySelector('.cam-btns');
+  btns.addEventListener('click', function(e){
+    var b = e.target.closest('b');
+    if (!b) return;
+    e.stopPropagation();
+    var k = b.getAttribute('data-k');
+    if (k === 'close') {
+      cam.style.display = 'none';
+    } else if (k === 'min') {
+      cam.classList.toggle('min');
+      cam.classList.remove('max');
+    } else if (k === 'max') {
+      cam.classList.toggle('max');
+      cam.classList.remove('min');
+    }
+  });
   /* 窗口尺寸变化时，把浮窗拉回可视区域 */
   window.addEventListener('resize', function(){
     if (!cam.style.left) return;
