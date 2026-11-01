@@ -162,44 +162,52 @@ h1{
   .game .glyph{font-size:32px}
 }
 
-/* ---------- Webcam 浮窗（参考图配色与比例） ---------- */
+/* ---------- Webcam 浮窗（还原参考图的多层边框） ---------- */
 .cam{
-  position:fixed;right:20px;bottom:20px;z-index:80;
-  width:320px;
+  position:fixed;right:22px;bottom:22px;z-index:80;
+  width:380px;
   background:#F8DFF1;
+  /* 内层紫蓝线 */
   border:3px solid #4825C5;
-  box-shadow:5px 5px 0 rgba(72,37,197,.32);
+  /* 外层灰带 4px + 最外深紫蓝 1px + 投影 */
+  box-shadow:
+    0 0 0 4px #E2E2E1,
+    0 0 0 5px #512DC6,
+    7px 7px 0 5px rgba(72,37,197,.22);
   user-select:none;-webkit-user-select:none;
   touch-action:none;
+  font-family:var(--rc-font);
 }
 .cam-bar{
-  display:flex;align-items:center;gap:6px;
-  height:22px;padding:0 7px;
+  display:flex;align-items:center;gap:7px;
+  height:24px;padding:0 8px;
   background:#E2E2E1;
-  border-top:3px solid #4825C5;
+  /* 只保留下边线，避免与 .cam 的上边框叠成双倍宽 */
   border-bottom:3px solid #4825C5;
   cursor:grab;
-  font-size:10px;letter-spacing:2px;color:#4825C5;
+  font-family:var(--rc-font);
+  font-size:11px;letter-spacing:2px;color:#4825C5;
   box-sizing:border-box;
 }
 .cam-bar:active{cursor:grabbing}
 .cam-ico{
-  width:10px;height:10px;flex:none;background:#4825C5;
+  width:11px;height:11px;flex:none;background:#4825C5;
 }
 .cam-bar::after{
   content:"\25A1 \00D7";margin-left:auto;
-  color:#4825C5;font-size:10px;letter-spacing:3px;
+  color:#4825C5;font-size:11px;letter-spacing:3px;
+  font-family:var(--rc-font);
 }
 .cam-view{
-  position:relative;height:187px;
+  position:relative;height:226px;
   background:#F8DFF1;
   background-image:
-    radial-gradient(circle at 16% 14%, #BFABE8 0 2px, transparent 2px),
-    radial-gradient(circle at 86% 20%, #C4DAFA 0 2px, transparent 2px),
-    radial-gradient(circle at 28% 80%, #D7C4EA 0 2px, transparent 2px),
-    radial-gradient(circle at 90% 86%, #E9C5EA 0 2px, transparent 2px),
-    radial-gradient(circle at 64% 10%, #D7C4EA 0 1px, transparent 1px),
-    radial-gradient(circle at 9% 56%, #C4DAFA 0 1px, transparent 1px);
+    radial-gradient(circle at 15% 13%, #BFABE8 0 2px, transparent 2px),
+    radial-gradient(circle at 87% 19%, #C4DAFA 0 2px, transparent 2px),
+    radial-gradient(circle at 27% 81%, #D7C4EA 0 2px, transparent 2px),
+    radial-gradient(circle at 91% 87%, #E9C5EA 0 2px, transparent 2px),
+    radial-gradient(circle at 64% 9%, #D7C4EA 0 1px, transparent 1px),
+    radial-gradient(circle at 8% 55%, #C4DAFA 0 1px, transparent 1px);
   overflow:hidden;line-height:0;
 }
 .cam-view img{
@@ -211,17 +219,15 @@ h1{
 }
 .cam-view img:active{transform:scale(.985)}
 .cam-foot{
-  height:11px;line-height:11px;
+  height:12px;
   background:#E2E2E1;
   border-top:2px solid #4825C5;
-  color:#4825C5;font-size:8px;text-align:center;
-  letter-spacing:.5px;white-space:nowrap;overflow:hidden;
 }
-@media (max-width:560px){
-  .cam{width:224px;right:8px;bottom:8px}
-  .cam-bar{height:18px;font-size:9px}
-  .cam-view{height:131px}
-  .cam-foot{height:10px;line-height:10px;font-size:7px}
+@media (max-width:600px){
+  .cam{width:264px;right:8px;bottom:8px}
+  .cam-bar{height:19px;font-size:10px}
+  .cam-view{height:157px}
+  .cam-foot{height:10px}
 }
 </style>
 </head>
@@ -255,7 +261,7 @@ h1{
   <div class="cam-view">
     <img id="camFace" src="img/alice/face1.png" alt="Alice" draggable="false">
   </div>
-  <div class="cam-foot">点我换表情 · 拖我移动</div>
+  <div class="cam-foot"></div>
 </div>
 
 <script>
