@@ -249,7 +249,7 @@ h1{
   object-fit:cover;object-position:center top;
   cursor:pointer;
   -webkit-user-drag:none;
-  transform:translate(0,6px);
+  transform:translate(0,6px) scale(1.08);
   transition:transform .28s cubic-bezier(.22,.61,.36,1);
   will-change:transform;
 }
@@ -334,7 +334,7 @@ console.log(
 
   /* Alice 朝鼠标方向微微偏移（初始基准下移 6px） */
   (function(){
-    var BASE_Y = 6, AMP = 6, last = 0;
+    var BASE_Y = 6, AMP_X = 12, AMP_Y = 6, SCALE = 1.08, last = 0;
     window.addEventListener('mousemove', function(e){
       var now = (window.performance && performance.now) ? performance.now() : Date.now();
       if (now - last < 16) return;          /* ~60fps 节流 */
@@ -345,10 +345,10 @@ console.log(
       var ry = (e.clientY / vh - 0.5) * 2;
       if (rx < -1) rx = -1; else if (rx > 1) rx = 1;
       if (ry < -1) ry = -1; else if (ry > 1) ry = 1;
-      var tx = rx * AMP;
-      var ty = BASE_Y + ry * AMP;
+      var tx = rx * AMP_X;
+      var ty = BASE_Y + ry * AMP_Y;
       face.style.transform =
-        'translate(' + tx.toFixed(1) + 'px,' + ty.toFixed(1) + 'px)';
+        'translate(' + tx.toFixed(1) + 'px,' + ty.toFixed(1) + 'px) scale(' + SCALE + ')';
     }, { passive: true });
   })();
   /* 拖动（Pointer Events，鼠标与触摸通用） */
