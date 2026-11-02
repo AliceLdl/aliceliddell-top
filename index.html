@@ -320,15 +320,69 @@ console.log(
   var face = document.getElementById('camFace');
   if (!cam || !face) return;
 
-  /* 预加载 6 张表情，避免切换时闪白 */
-  for (var i = 1; i <= 6; i++) { var im = new Image(); im.src = 'img/alice/face' + i + '.png'; }
+  /* ===== 表情帧动画 ===== */
+  var ALICE = {
+    comic: 2, egosearching: 5, egosearching_ura: 5, game: 5, handspinner: 11,
+    headphone: 3, henoji: 2, idle: 2, idle_anxiety: 8, idle_happy: 9,
+    idle_iraira: 6, idle_normal: 12, movie: 5, nail: 5, negative: 14,
+    positive: 13, selfie: 6, sleep: 9, smile: 3, talk: 5, tv: 7, voice_training: 8
+  };
+  var NAMES = Object.keys(ALICE);
+  var HOLD_MS  = 1200;   /* 停留时长 */
+  var FRAME_MS = 90;     /* 每帧时长 */
 
-  /* 点击角色循环切换表情 */
-  var idx = 1;
+  var expIndex = NAMES.indexOf('idle') >= 0 ? NAMES.indexOf('idle') : 0;
+  var gen = 0;           /* 代际计数：切换表情时废弃旧定时器 */
+  var cache = {};
+
+  function frameUrl(exp, i){ return 'img/alice/' + exp + '/' + i + '.png'; }
+
+  /* 预加载某个表情的所有帧 */
+  function preload(exp, cb){
+    if (cache[exp]) return cb();
+    var total = ALICE[exp], left = total;
+    if (!total) return cb();
+    for (var i = 0; i < total; i++) {
+      var im = new Image();
+      im.onload = im.onerror = function(){ if (--left <= 0) { cache[exp] = 1; cb(); } };
+      im.src = frameUrl(exp, i);
+    }
+  }
+
+  /* 一个循环：静止在 000 一会儿 -> 依次播放 -> 回到 000 静止 */
+  function cycle(){
+    var my  = ++gen;
+    var exp = NAMES[expIndex];
+    var total = ALICE[exp];
+    var cur = 0;
+
+    face.src = frameUrl(exp, 0);                 /* 停在 000 */
+
+    setTimeout(function(){
+      if (my !== gen) return;
+      var iv = setInterval(function(){
+        if (my !== gen) { clearInterval(iv); return; }
+        cur++;
+        if (cur >= total) { clearInterval(iv); cycle(); return; }
+        face.src = frameUrl(exp, cur);
+      }, FRAME_MS);
+    }, HOLD_MS);
+  }
+
+  /* 点击切换表情系列 */
   face.addEventListener('click', function(){
-    idx = idx % 6 + 1;
-    face.src = 'img/alice/face' + idx + '.png';
+    expIndex = (expIndex + 1) % NAMES.length;
+    var exp = NAMES[expIndex];
+    preload(exp, cycle);
   });
+
+  /* 切换到下一个表情时重开循环 */
+  function switchTo(i){
+    expIndex = i % NAMES.length;
+    preload(NAMES[expIndex], cycle);
+  }
+
+  preload(NAMES[expIndex], cycle);
 
   
 
