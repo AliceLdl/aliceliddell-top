@@ -321,15 +321,37 @@ console.log(
   if (!cam || !face) return;
 
   /* ===== 表情帧动画 ===== */
+  /* 每个表情的帧数与播放速率（fps）
+     速率取自同一套素材的参考实现 vanillyn/webcam 的 SpriteFrames 定义：
+       ame_idle=1.0  ame_smile=1.0  ame_headphone=3.0  ame_game=5.0
+       ame_handspinner=5.0  ame_selfie=2.0  ame_tv=2.0  ame_voice=2.0
+     无直接对应的按同类动作推断 */
   var ALICE = {
-    comic: 2, egosearching: 5, egosearching_ura: 5, game: 5, handspinner: 11,
-    headphone: 3, henoji: 2, idle: 2, idle_anxiety: 8, idle_happy: 9,
-    idle_iraira: 6, idle_normal: 12, movie: 5, nail: 5, negative: 14,
-    positive: 13, selfie: 6, sleep: 9, smile: 3, talk: 5, tv: 7, voice_training: 8
+    idle:            { n: 2,  fps: 1.0 },
+    idle_normal:     { n: 12, fps: 1.0 },
+    idle_happy:      { n: 9,  fps: 1.0 },
+    idle_anxiety:    { n: 8,  fps: 1.0 },
+    idle_iraira:     { n: 6,  fps: 1.0 },
+    smile:           { n: 3,  fps: 1.0 },
+    comic:           { n: 2,  fps: 3.0 },
+    game:            { n: 5,  fps: 5.0 },
+    handspinner:     { n: 11, fps: 5.0 },
+    headphone:       { n: 3,  fps: 3.0 },
+    selfie:          { n: 6,  fps: 2.0 },
+    talk:            { n: 5,  fps: 2.0 },
+    tv:              { n: 7,  fps: 2.0 },
+    voice_training:  { n: 8,  fps: 2.0 },
+    egosearching:    { n: 5,  fps: 2.0 },
+    egosearching_ura:{ n: 5,  fps: 2.0 },
+    movie:           { n: 5,  fps: 2.0 },
+    nail:            { n: 5,  fps: 3.0 },
+    negative:        { n: 14, fps: 2.0 },
+    positive:        { n: 13, fps: 2.0 },
+    sleep:           { n: 9,  fps: 1.0 },
+    henoji:          { n: 2,  fps: 2.0 }
   };
   var NAMES = Object.keys(ALICE);
-  var HOLD_MS  = 1200;   /* 停留时长 */
-  var FRAME_MS = 100;     /* 每帧时长 */
+  var HOLD_MS = 1200;   /* 停在首帧的时长 */
 
   var expIndex = NAMES.indexOf('idle') >= 0 ? NAMES.indexOf('idle') : 0;
   var gen = 0;           /* 代际计数：切换表情时废弃旧定时器 */
@@ -340,7 +362,7 @@ console.log(
   /* 预加载某个表情的所有帧 */
   function preload(exp, cb){
     if (cache[exp]) return cb();
-    var total = ALICE[exp], left = total;
+    var total = ALICE[exp].n, left = total;
     if (!total) return cb();
     for (var i = 0; i < total; i++) {
       var im = new Image();
@@ -353,7 +375,7 @@ console.log(
   function cycle(){
     var my  = ++gen;
     var exp = NAMES[expIndex];
-    var total = ALICE[exp];
+    var total = ALICE[exp].n;
     var cur = 0;
 
     face.src = frameUrl(exp, 0);                 /* 停在 000 */
@@ -365,7 +387,7 @@ console.log(
         cur++;
         if (cur >= total) { clearInterval(iv); cycle(); return; }
         face.src = frameUrl(exp, cur);
-      }, FRAME_MS);
+      }, 1000 / ALICE[exp].fps);
     }, HOLD_MS);
   }
 
