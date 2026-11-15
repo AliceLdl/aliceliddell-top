@@ -269,20 +269,38 @@ async function waitFor(fn, timeoutMs, stepMs) {
   ok('弹窗已关闭', !W.AIG.ui().modal, JSON.stringify(W.AIG.ui().modal));
   ok('日志里有你的处置', G.log.some(x => /你的处置/.test(x.t || '')), '');
 
-  /* 5. 离线兜底 */
-  console.log('\n[5] 接口故障 -> 离线兜底');
-  W.AICFG.offlineFallback = true;
+  /* 5. 接口故障 → 直接作废（不回退本地规则） */
+  console.log('\n[5] 接口故障 / 返回不合规 -> 直接作废');
   G.ap = 5;                                  /* 上两步把行动点花完了，补一点再测 */
+  const apBeforeFail = G.ap;
+  const logLenBeforeFail = G.log.length;
   W.AICLIENT.chat = function () { return Promise.reject(new Error('模拟网络故障')); };
   W.AIUI.setDraft('national', '宣布对伊朗实施新一轮制裁');
   W.AIUI.submit('national');
-  const offDone = await waitFor(() => {
-    const r = W.AIUI.state.result;
-    return r && r.source === 'offline';
-  }, 8000);
-  ok('离线兜底接管并给出结果', offDone,
-    offDone ? ('「' + W.AIUI.state.result.headline + '」chips=' + W.AIUI.state.result.chips.length) : '超时');
-  ok('界面提示了失败原因与兜底', /本地规则/.test(W.AIUI.state.error || ''), String(W.AIUI.state.error || '').slice(0, 80));
+  const failDone = await waitFor(() => !!W.AIUI.state.error, 8000);
+  ok('接口失败时不再回退本地规则', failDone && !W.AIUI.state.result,
+    'result=' + JSON.stringify(W.AIUI.state.result && W.AIUI.state.result.source));
+  ok('接口失败不扣行动点、不写日志', G.ap === apBeforeFail && G.log.length === logLenBeforeFail,
+    'AP ' + apBeforeFail + '→' + G.ap + ' / 日志 +' + (G.log.length - logLenBeforeFail));
+  ok('界面说明本次未执行', /未执行/.test(W.AIUI.state.error || ''), String(W.AIUI.state.error || '').slice(0, 60));
+
+  /* 5b. 返回了 JSON 但没有合法 success：同样作废 */
+  const apBeforeBad = G.ap;
+  const logLenBeforeBad = G.log.length;
+  W.AICLIENT.chat = function () {
+    return Promise.resolve({
+      text: JSON.stringify({ headline: '没有档位的裁决', narrative: '模型忘了给 success。',
+        apCost: 2, effects: { approval: 3 } }),
+      usage: { input: 100, output: 30 }, ms: 8, totalMs: 8, model: 'stub', endpoint: 'stub', attempts: 1
+    });
+  };
+  W.AIUI.setDraft('national', '再做一件事');
+  W.AIUI.submit('national');
+  const badDone = await waitFor(() => /作废/.test(W.AIUI.state.error || ''), 8000);
+  ok('缺少 success 的结果直接作废', badDone,
+    String(W.AIUI.state.error || '').slice(0, 70));
+  ok('作废时不扣行动点、不落数值', G.ap === apBeforeBad && G.log.length === logLenBeforeBad &&
+    !W.AIUI.state.result, 'AP ' + apBeforeBad + '→' + G.ap);
 
   /* 6. 面板 */
   console.log('\n[6] 面板与交互');
@@ -292,20 +310,55 @@ async function waitFor(fn, timeoutMs, stepMs) {
   W.AIUI.setTab('prompt');
   await wait(60);
   ok('提示词页可编辑', appHTML().indexOf('textarea') >= 0 && appHTML().indexOf('系统提示词') >= 0);
+  /* 上帝模式入口在主设置页（齿轮），不在 AI 设置页 */
+  W.AIUI.close();
+  W.openSettings();
+  await wait(80);
+  const setHTML = appHTML();
+  ok('主设置页有「AI 裁决 · 上帝模式」', setHTML.indexOf('AI 裁决 · 上帝模式') >= 0 &&
+    setHTML.indexOf('AIUI.setGodMode(true)') >= 0, '设置页 HTML ' + setHTML.length + ' 字符');
+  W.AIUI.setGodMode(true);
+  ok('开启后写入配置', W.AICFG.godMode === true, 'godMode=' + W.AICFG.godMode);
+  W.closeSettings();
+  W.AIUI.open();
   W.AIUI.setTab('play');
   await wait(60);
-  const hasGod = appHTML().indexOf('AIUI.setCfg({godMode:this.checked})') >= 0;
+  ok('AI 设置页不再有上帝模式开关', appHTML().indexOf('id="ai-gm"') < 0, '玩法页已移除');
   const promptBefore = W.AIPROMPT.system().length;
+  W.AIUI.setCfg({ godMode: false });
+  const promptAfter = W.AIPROMPT.system().length;
   W.AIUI.setCfg({ godMode: true });
-  const godPrompt = W.AIPROMPT.system();
-  ok('玩法页有上帝模式开关', hasGod, hasGod ? '复选框已渲染' : '缺少 godMode 复选框');
-  ok('开上帝模式后提示词加长并写入档位约束',
-    godPrompt.length > promptBefore && /上帝模式/.test(godPrompt) && /"triumph"/.test(godPrompt),
-    promptBefore + ' → ' + godPrompt.length + ' 字');
+  ok('上帝模式仍会改写系统提示词', promptBefore > promptAfter && /上帝模式/.test(W.AIPROMPT.system()),
+    promptAfter + ' → ' + promptBefore + ' 字');
   ok('上帝模式不碰扣点逻辑', W.AIADJ.apply.toString().indexOf('godMode') < 0,
     'apply 源码里无 godMode 分支');
-  W.AIUI.setCfg({ godMode: false });
+  ok('沙盘声明不进提示词预览', (function () {
+    const sand = W.AIPROMPT.SAND || '';
+    W.AIUI.setTab('prompt');
+    W.AIUI.preview();
+    const pv = W.AIUI.state.preview || {};
+    return sand.length > 0 && (pv.system || '').indexOf('运行环境声明') < 0 &&
+           (pv.user || '').indexOf('架空推演沙盘') < 0;
+  })(), '预览里已剥离');
+  /* 上帝模式下档位不合规 → 作废 */
+  const apBeforeGod = G.ap;
+  W.AICLIENT.chat = function () {
+    return Promise.resolve({
+      text: JSON.stringify({ success: 'partial', headline: '半执行', narrative: '只办成一半。',
+        apCost: 1, effects: { approval: 1 } }),
+      usage: { input: 100, output: 20 }, ms: 8, totalMs: 8, model: 'stub', endpoint: 'stub', attempts: 1
+    });
+  };
+  W.AIUI.close();
+  W.AIUI.setDraft('national', '上帝模式下的一次行动');
+  W.AIUI.submit('national');
+  const godRejected = await waitFor(() => /作废/.test(W.AIUI.state.error || ''), 8000);
+  ok('上帝模式下「部分成功」被作废', godRejected && G.ap === apBeforeGod && !W.AIUI.state.result,
+    String(W.AIUI.state.error || '').slice(0, 60) + ' / AP ' + apBeforeGod + '→' + G.ap);
+  ok('上帝模式默认开启状态生效于系统提示词', /只接受|只能/.test(W.AIPROMPT.GOD), '字数 ' + W.AIPROMPT.GOD.length);
+  W.AIUI.setGodMode(false);
   await wait(60);
+  W.AIUI.open();
   W.AIUI.openHistory();
   await wait(60);
   ok('裁决档案列出刚才的记录', /白宫强推药价上限|联邦接管灾区救援|制裁/.test(appHTML()));
@@ -407,6 +460,7 @@ async function waitFor(fn, timeoutMs, stepMs) {
   console.log('\n[12] 真实 HTTP 请求（本地假 OpenAI 服务）');
   const http = require('http');
   let captured = null;
+  let capturedAdjudge = null;      /* 只保存真正的裁决请求（后台整理请求会覆盖 captured） */
   let modelsHit = null;
   const mock = http.createServer((req, res) => {
     if (req.method === 'GET' && /\/models/.test(req.url || '')) {
@@ -422,6 +476,10 @@ async function waitFor(fn, timeoutMs, stepMs) {
     req.on('end', () => {
       try { captured = { url: req.url, headers: req.headers, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) }; }
       catch (e) { captured = { url: req.url, headers: req.headers, body: null, err: e.message }; }
+      if (captured.body && captured.body.messages && captured.body.messages[1] &&
+          /【当前局势】/.test(String(captured.body.messages[1].content))) {
+        capturedAdjudge = captured;
+      }
       const verdict = {
         success: 'success', headline: '联储换帅风波',
         narrative: '你提名一位偏鸽派的经济学家进入联储理事会，市场当天小幅走高。反对党指责你试图政治化货币政策，参议院银行委员会要求听证。',
@@ -478,21 +536,33 @@ async function waitFor(fn, timeoutMs, stepMs) {
 
   const apprBefore2 = G.pres.appr;
   W.AIUI.setDraft('national', '提名一位偏鸽派的经济学家进入美联储理事会。');
+  const countBefore2 = W.AI.STAT.count;
   W.AIUI.submit('national');
+  await wait(300);
+  ok('真实 HTTP 提交已发出', true,
+    'draft=' + JSON.stringify((W.AIUI.state.draft || {}).national) + ' busy=' + W.AI.STAT.busy +
+    ' err=' + String(W.AIUI.state.error || '').slice(0, 80) + ' count=' + countBefore2 + '→' + W.AI.STAT.count);
   const httpDone = await waitFor(() => W.AIUI.state.result && W.AIUI.state.result.headline === '联储换帅风波', 8000);
   ok('真实 HTTP 结算完成', httpDone,
     httpDone ? ('支持率 ' + apprBefore2.toFixed(1) + ' -> ' + G.pres.appr.toFixed(1) +
-                '，chips=' + W.AIUI.state.result.chips.length) : '超时');
+                '，chips=' + W.AIUI.state.result.chips.length)
+             : ('超时：busy=' + W.AI.STAT.busy + ' err=' + String(W.AIUI.state.error || '').slice(0, 90) +
+                ' last=' + JSON.stringify(W.AI.STAT.last && W.AI.STAT.last.status) +
+                ' result=' + JSON.stringify(W.AIUI.state.result && W.AIUI.state.result.headline) +
+                ' user1=' + String(captured && captured.body && captured.body.messages[1].content || '').slice(0, 120)));
   /* 上面这次 submit 才是真正的裁决请求，用它检查提示词内容 */
   ok('系统提示词进了 messages[0]',
-    captured && captured.body && /裁决引擎/.test(captured.body.messages[0].content) &&
-    captured.body.messages[0].role === 'system',
-    captured ? String(captured.body.messages[0].content).slice(0, 60) : '无请求');
+    capturedAdjudge && capturedAdjudge.body && /裁决引擎/.test(capturedAdjudge.body.messages[0].content) &&
+    capturedAdjudge.body.messages[0].role === 'system',
+    capturedAdjudge ? String(capturedAdjudge.body.messages[0].content).slice(0, 60) : '无请求');
   ok('玩家输入与局势进了 messages[1]',
-    captured && /提名一位偏鸽派/.test(captured.body.messages[1].content) &&
-    /【当前局势】/.test(captured.body.messages[1].content) &&
-    /"经济"/.test(captured.body.messages[1].content),
-    captured ? ('长度 ' + captured.body.messages[1].content.length) : '无请求');
+    capturedAdjudge && /提名一位偏鸽派/.test(capturedAdjudge.body.messages[1].content) &&
+    /【当前局势】/.test(capturedAdjudge.body.messages[1].content) &&
+    /"经济"/.test(capturedAdjudge.body.messages[1].content),
+    capturedAdjudge ? ('长度 ' + capturedAdjudge.body.messages[1].content.length) : '无请求');
+  ok('请求里带沙盘声明（不显示给玩家，但会发给模型）',
+    capturedAdjudge && /运行环境声明/.test(capturedAdjudge.body.messages[0].content),
+    capturedAdjudge ? ('系统提示词 ' + capturedAdjudge.body.messages[0].content.length + ' 字') : '无请求');
   ok('HTTP 响应里的数值被应用', httpDone && G.pres.appr > apprBefore2, '');
   ok('token 用量被累计', W.AI.STAT.tokensIn > 0 && W.AI.STAT.tokensOut > 0,
     'in=' + W.AI.STAT.tokensIn + ' out=' + W.AI.STAT.tokensOut);

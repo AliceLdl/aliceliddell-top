@@ -126,6 +126,12 @@ function topbar() {
 function setTab(t) { UI.tab = t; render(); }
 function doAdvance() { G.w++; render(); }
 function fireEvent(ev) { log('event:' + (ev && ev.cn), ''); }
+function settingsPane() {
+  return '<div class="modal"><div class="box"><h2>设置</h2>' +
+    '<div class="setsec"><div class="sechead">UI 时代</div></div>' +
+    '<div style="text-align:right;margin-top:16px">' +
+    '<button class="btn" onclick="closeSettings()">关闭</button></div></div></div>';
+}
 
 /* ---------------- 沙箱 ---------------- */
 const sandbox = {
@@ -135,7 +141,7 @@ const sandbox = {
   makeCustomBill, playerIsPresident, dateLabel, h, isCampaignMode, showToast,
   actionFail, monthOfWeek, evTextNow, shockScore, activeCrisis, crisisDef, absWeek,
   presActionsPane, camp2ActionsHTML, pendingEventCard, shockEvModalPane, crisisPane,
-  modalHTML, gearBtnHTML, mainPane, topbar, setTab, doAdvance, fireEvent,
+  modalHTML, gearBtnHTML, mainPane, topbar, setTab, doAdvance, fireEvent, settingsPane,
   localStorage: (function () {
     const m = {};
     return { getItem: k => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); },
@@ -281,10 +287,12 @@ t('八种任务模板都能组装', () => {
 });
 t('提示词覆写与恢复默认', () => {
   A.set({ promptOverrides: { system: '自定义系统提示' } });
-  if (PROMPT.system().indexOf('自定义系统提示') !== 0) throw new Error('覆写未生效');
+  const s1 = PROMPT.system();
+  if (s1.indexOf('自定义系统提示') < 0) throw new Error('覆写未生效');
+  if (s1.indexOf(PROMPT.SAND) !== 0) throw new Error('沙盘声明应排在系统提示词最前');
   A.set({ promptOverrides: {} });
   if (PROMPT.system().indexOf('裁决引擎') < 0) throw new Error('恢复默认失败');
-  return { info: 'OK' };
+  return { info: '覆写生效，沙盘声明始终在最前（' + PROMPT.SAND.length + ' 字）' };
 });
 
 /* 4. JSON 解析 */
@@ -443,10 +451,11 @@ t('五个档位都能识别（含中文别名、数字与旧 ok 字段）', () =
     const got = ADJ.parseGrade({ success: v });
     if (got !== want) throw new Error(String(v) + ' → ' + got + '（应为 ' + want + '）');
   }
-  if (ADJ.parseGrade({ ok: false }) !== 'none') throw new Error('旧 ok:false 未映射到 none');
-  if (ADJ.parseGrade({ ok: true }) !== 'success') throw new Error('旧 ok:true 未映射到 success');
-  if (ADJ.parseGrade({}) !== 'success') throw new Error('缺字段应默认 success');
-  return { info: cases.length + ' 个别名 + 旧 ok 兼容' };
+  if (ADJ.parseGrade({ ok: false }) !== null) throw new Error('缺 success 字段必须返回 null（不再兼容 ok）');
+  if (ADJ.parseGrade({}) !== null) throw new Error('缺字段应返回 null');
+  if (ADJ.parseGrade({ success: 'bogus' }) !== null) throw new Error('无法识别的值应返回 null');
+  if (ADJ.parseGrade({ success: '' }) !== null) throw new Error('空字符串应返回 null');
+  return { info: cases.length + ' 个别名；缺失/非法一律 null' };
 });
 t('档位折算系数正确，且同一档位结果恒定（不再掷骰）', () => {
   const base = { apCost: 1, effects: { approval: 4, tension: 6, division: 2 } };
@@ -472,6 +481,33 @@ t('档位折算系数正确，且同一档位结果恒定（不再掷骰）', ()
   }
   A.set({ variance: true });
   return { info: info.join(' · ') };
+});
+t('档位缺失/非法：整份结果作废，不落任何数值', () => {
+  const a = ADJ.normalize({ headline: '无档位', narrative: 'x', apCost: 2, effects: { approval: 5 } }, 'national');
+  if (a.ok || a.invalid !== 'missing') throw new Error('缺 success 未作废：' + a.invalid);
+  if (Object.keys(a.fx).length || a.apCost !== 0) throw new Error('作废后仍带数值');
+  const b = ADJ.normalize({ success: '随便写的', effects: { approval: 5 } }, 'national');
+  if (b.ok || b.invalid !== 'god_rejected' && b.invalid !== 'missing') throw new Error('非法值未作废：' + b.invalid);
+  const c = ADJ.normalize({ success: 'none', rejectReason: '越权' }, 'national');
+  if (c.ok || c.invalid) throw new Error('模型主动「未执行」仍应合法（只是 ok=false）：' + c.invalid);
+  return { info: '缺失作废 / 非法作废 / 主动未执行合法' };
+});
+t('上帝模式只接受「成功 / 大成功」', () => {
+  A.set({ godMode: true });
+  const bad = ['none', 'fail', 'partial'];
+  for (const g of bad) {
+    const n = ADJ.normalize({ success: g, apCost: 1, effects: { approval: 2 } }, 'national');
+    if (n.ok || n.invalid !== 'god_rejected') throw new Error('上帝模式仍接受了 ' + g);
+    if (Object.keys(n.fx).length) throw new Error(g + ' 作废后仍带数值');
+  }
+  const okN = ADJ.normalize({ success: 'success', apCost: 1, effects: { approval: 2 } }, 'national');
+  if (!okN.ok || okN.gradeCN !== '成功') throw new Error('success 被误伤');
+  const tri = ADJ.normalize({ success: 'triumph', apCost: 1, effects: { approval: 2 } }, 'national');
+  if (!tri.ok || tri.gradeCN !== '大成功') throw new Error('triumph 被误伤');
+  A.set({ godMode: false });
+  const back = ADJ.normalize({ success: 'partial', apCost: 1, effects: { approval: 2 } }, 'national');
+  if (!back.ok) throw new Error('关掉上帝模式后 partial 应恢复合法');
+  return { info: 'none/fail/partial 作废；success/triumph 通过' };
 });
 t('上帝模式只改提示词，行动点照常扣', () => {
   A.set({ godMode: true });
@@ -938,9 +974,9 @@ t('install 后入口被替换', () => {
   HOOKS.install();
   const diffs = ['presActionsPane', 'camp2ActionsHTML', 'pendingEventCard',
                  'shockEvModalPane', 'crisisPane', 'modalHTML', 'gearBtnHTML',
-                 'mainPane', 'topbar', 'setTab', 'doAdvance', 'fireEvent']
+                 'mainPane', 'topbar', 'setTab', 'doAdvance', 'fireEvent', 'settingsPane']
     .filter(k => typeof W[k] === 'function' && W[k] !== W.AIORIG[k]);
-  if (diffs.length < 12) throw new Error('只替换了 ' + diffs.length + ' 个：' + diffs.join(','));
+  if (diffs.length < 13) throw new Error('只替换了 ' + diffs.length + ' 个：' + diffs.join(','));
   return { info: diffs.length + ' 个：' + diffs.join(',') };
 });
 t('AI 关闭时回退到原版', () => {

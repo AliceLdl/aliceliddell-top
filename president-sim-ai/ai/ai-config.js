@@ -31,10 +31,8 @@
     contextLevel: 'standard',
     /* 叙事风格：documentary=白宫纪事 / news=通讯社快讯 / novel=政治小说 */
     style: 'documentary',
-    /* 引擎对 AI 给出的数值施加 ±25% 的随机扰动（保持推演的不确定性） */
+    /* 引擎对 AI 给出的数值施加 ±22% 的随机扰动（保持推演的不确定性） */
     variance: true,
-    /* 接口不可用时，用本地规则裁决（原版数值表反推），保证还能玩 */
-    offlineFallback: true,
     /* 在自由输入框下方保留原版内置行动/选项（默认关闭） */
     showClassic: false,
     /* 数值上限倍率：0.6 保守 / 1.0 标准 / 1.5 宽松 */

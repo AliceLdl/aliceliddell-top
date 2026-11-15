@@ -101,24 +101,25 @@
   /* ------------------------------------------------------------------ *
    * 4. 执行档位解析（替代原来的随机成功判定）+ 随机扰动
    * ------------------------------------------------------------------ */
-  /* 模型可能返回的写法全都收：数字档位、布尔、英文档名、中文档名、旧版 ok 字段 */
+  /* 模型返回的档位写法：数字、布尔、英文/中文档名都收；
+     识别不出来（没给、给空、给了别的词）一律返回 null —— 调用方据此直接作废这份结果。 */
   function parseGrade(raw) {
-    if (!raw || typeof raw !== 'object') return 'none';
+    if (!raw || typeof raw !== 'object') return null;
     var v = raw.success;
     if (v == null) v = raw['结果'];
     if (v == null) v = raw.grade;
     if (v == null) v = raw.result;
-    /* 旧版契约：只有 ok */
-    if (v == null && raw.ok != null) return raw.ok === false ? 'none' : 'success';
+    if (v == null || v === '') return null;
 
     if (typeof v === 'boolean') return v ? 'success' : 'none';
     if (typeof v === 'number') {
+      if (!isFinite(v)) return null;
       var i = Math.round(Math.max(0, Math.min(GRADES.length - 1, v)));
       return GRADES[i].id;
     }
-    var s = String(v == null ? '' : v).trim().toLowerCase()
+    var s = String(v).trim().toLowerCase()
       .replace(/[\s_\-]+/g, '').replace(/["'「」【】]/g, '');
-    if (!s) return 'success';
+    if (!s) return null;
     for (var k = 0; k < GRADES.length; k++) {
       var g = GRADES[k];
       for (var j = 0; j < g.tags.length; j++) {
@@ -131,7 +132,13 @@
     if (/部分|partial|partly|一半/.test(s)) return 'partial';
     if (/大成功|超预期|triumph|great|perfect/.test(s)) return 'triumph';
     if (/失败|fail|翻车/.test(s)) return 'fail';
-    return 'success';
+    return null;
+  }
+
+  /* 当前配置下允许的档位：上帝模式只认「成功 / 大成功」 */
+  function allowedGrades(god) {
+    return god ? ['success', 'triumph']
+               : ['none', 'fail', 'partial', 'success', 'triumph'];
   }
 
   function jitter(v) {
@@ -164,12 +171,31 @@
       campaign: null, notes: [], ledger: null, raw: raw
     };
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-      out.ok = false; out.success = 'none'; out.grade = 0; out.gradeCN = '未执行';
-      out.rejectReason = '模型返回的不是一个对象。';
+      out.ok = false; out.invalid = 'not_object';
+      out.success = 'none'; out.grade = 0; out.gradeCN = '未执行';
+      out.rejectReason = '模型返回的不是一个对象，本次结果作废。';
       return out;
     }
 
-    var grade = gradeOf(parseGrade(raw));
+    /* --- 档位严格校验：模型必须给出合法 success，否则整份结果作废（不落任何数值）。
+           上帝模式下只接受「成功 / 大成功」，其余（含部分成功）一律作废。 --- */
+    var godNow = !!cfg().godMode;
+    var parsed = parseGrade(raw);
+    var allow = allowedGrades(godNow);
+    if (parsed == null || allow.indexOf(parsed) < 0) {
+      out.ok = false;
+      out.invalid = (parsed == null) ? 'missing' : 'god_rejected';
+      out.success = 'none'; out.grade = 0; out.gradeCN = '未执行';
+      out.rejectReason = parsed == null
+        ? '模型没有返回合法的 success 档位，本次结果作废。'
+        : (godNow
+            ? '上帝模式只接受「成功 / 大成功」，模型返回了「' + gradeOf(parsed).cn + '」，本次结果作废。'
+            : '无法识别的 success 档位「' + cleanText(raw.success, 20) + '」，本次结果作废。');
+      out.notes.push(out.rejectReason);
+      return out;
+    }
+
+    var grade = gradeOf(parsed);
     out.success = grade.id;
     out.grade = grade.idx;
     out.gradeCN = grade.cn;

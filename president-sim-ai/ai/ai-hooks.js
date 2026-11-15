@@ -193,14 +193,25 @@
     var shockRef = (mode === 'shock' && UI.modal && UI.modal.type === 'shockev')
       ? { k: UI.modal.shock, ev: UI.modal.ev } : null;
 
-    function finishWith(rawText, dt, usage, attempt, endpoint) {
+    function finishWith(rawText, dt, usage, attempt, endpoint, allowRepair) {
+      var text = String(rawText == null ? '' : rawText).trim();
+      if (!text) return { error: '接口返回了空内容' };
       var raw;
       try {
-        raw = global.AICLIENT.extractJson(rawText);
+        raw = global.AICLIENT.extractJson(text);
       } catch (e) {
         return { error: e.message };
       }
       var norm = global.AIADJ.normalize(raw, mode, ctxText);
+      /* 档位缺失/非法（上帝模式下只允许 成功/大成功）：整份结果作废，不落任何数值 */
+      if (norm.invalid) {
+        global.AI.STAT.last = {
+          at: global.AI.nowText(), mode: mode, ms: dt, attempts: attempt,
+          usage: usage, endpoint: endpoint || '', status: 'invalid',
+          error: norm.rejectReason || '结果作废', promptTokens: promptTok
+        };
+        return { invalid: norm };
+      }
       norm = global.AIADJ.gate(norm);
 
       global.AI.STAT.last = {
@@ -224,18 +235,32 @@
       return { ok: true };
     }
 
+    /* 结果作废：只报错，不改数值、不扣行动点、不推进事件/冲击/危机，也不回退到本地规则 */
+    function rejectInvalid(norm) {
+      ui.state.result = null;
+      ui.state.error = (norm && norm.rejectReason)
+        ? norm.rejectReason + '（未扣行动点，也未改动任何数值；可直接重试）'
+        : 'AI 返回的结果不合规，已作废。';
+    }
+
     global.AICLIENT.chat(built.system, built.user).then(function (res) {
       global.AI.STAT.last = { at: global.AI.nowText(), mode: mode, ms: res.totalMs || res.ms,
         attempts: res.attempts, usage: res.usage, endpoint: res.endpoint,
         status: 'ok', error: '', promptTokens: promptTok };
-      var r = finishWith(res.text, res.totalMs || res.ms, res.usage, res.attempts, res.endpoint);
+      var r = finishWith(res.text, res.totalMs || res.ms, res.usage, res.attempts, res.endpoint, true);
+      if (r && r.invalid) { rejectInvalid(r.invalid); return null; }
       if (r && r.error) {
-        /* 第一次解析失败：带上修复指令重试一次 */
+        /* 解析失败：带上修复指令重试一次；仍失败就作废，不落任何数值 */
         var user2 = built.user + '\n\n' + global.AIPROMPT.repairNote();
         return global.AICLIENT.chat(built.system, user2).then(function (res2) {
           var r2 = finishWith(res2.text, res2.totalMs || res2.ms, res2.usage,
-                              (res2.attempts || 1) + 1, res2.endpoint);
-          if (r2 && r2.error) throw new Error('两次返回都无法解析：' + r2.error);
+                              (res2.attempts || 1) + 1, res2.endpoint, false);
+          if (r2 && r2.invalid) { rejectInvalid(r2.invalid); return null; }
+          if (r2 && r2.error) {
+            ui.state.result = null;
+            ui.state.error = '两次返回都无法解析（' + r2.error + '），本次结果作废，未改动任何数值。';
+          }
+          return null;
         });
       }
       return null;
@@ -274,7 +299,10 @@
     try { built = global.AIPROMPT.buildMaintain(payload); }
     catch (e) { return; }
 
+    /* 整理是后台动作：不要把战情室上刚显示的那张结果卡清掉 */
+    var keepResult = ui.state.result;
     ui.startBusy('整理态势');
+    ui.state.result = keepResult;
     global.AICLIENT.chat(built.system, built.user, {
       maxTokens: Math.max(1000, Number(cfg().maxTokens) || 1200),
       temperature: 0.2
@@ -304,23 +332,10 @@
     };
     global.AI.STAT.error = msg;
 
-    /* 离线兜底：接口不通时仍可继续玩 */
-    if (cfg().offlineFallback) {
-      try {
-        var off = global.AIADJ.offline(mode, input, extra);
-        var norm = off.norm;
-        ui.state.result = null;
-        var summary = global.AIADJ.apply(norm, mode, { input: input, source: 'offline' });
-        summary.promptTokens = promptTok;
-        ui.state.result = summary;
-        ui.state.error = '接口调用失败，已用「本地规则」裁决（' + msg + '）';
-        afterApply(mode, norm, summary, input, refs);
-        return;
-      } catch (e2) {
-        msg = msg + '；本地兜底也失败了：' + (e2.message || e2);
-      }
-    }
-    ui.state.error = msg + '。可重试，或在 AI 设置里检查接口；也可以展开「经典内置选项」继续玩。';
+    /* 接口没连上 / 没返回内容：直接作废这次指令，不扣行动点、不改数值、不回退本地规则 */
+    ui.state.result = null;
+    ui.state.error = msg + '。本次指令未执行：没有扣除行动点，也没有改动任何数值。' +
+      '可重试，或到 AI 设置里检查接口；也可以展开「经典内置选项」继续玩。';
   }
 
   /* 结算之后：推进事件 / 冲击 / 危机各自的状态机 */
@@ -441,6 +456,7 @@
     AIORIG.topbar = global.topbar;
     AIORIG.setTab = global.setTab;
     AIORIG.doAdvance = global.doAdvance;
+    AIORIG.settingsPane = global.settingsPane;
     AIORIG.eventChoicesHTML = eventChoicesHTML;
     AIORIG.shockChoicesHTML = shockChoicesHTML;
     AIORIG.crisisChoicesHTML = crisisChoicesHTML;
@@ -543,8 +559,7 @@
     };
 
     /* 每推进一周，到点悄悄换一版舆论：已有快照才换，避免开局就烧请求 */
-    var lastPressTry = 0;
-    global.doAdvance = function () {
+    var lastPressTry = 0;    global.doAdvance = function () {
       var r = AIORIG.doAdvance ? AIORIG.doAdvance.apply(this, arguments) : undefined;
       try {
         var P = global.AIPRESS;
@@ -596,6 +611,31 @@
         '态势' + (n ? '<span style="opacity:.6;font-size:10px;margin-left:2px">' + n + '</span>' : '') + '</button>' +
         '<button class="btn sm" onclick="AIUI.open()" title="AI 设置（接口 / 提示词 / 玩法）" aria-label="AI 设置">' +
         'AI<span style="color:' + dot + ';font-size:10px;vertical-align:super">●</span></button>';
+    };
+
+    /* 主设置面板（齿轮 ⚙）里加一段「AI 裁决 · 上帝模式」：这是游戏的设置页，不是 AI 设置页 */
+    global.settingsPane = function () {
+      var html = AIORIG.settingsPane ? AIORIG.settingsPane.apply(this, arguments) : '';
+      try {
+        var c = cfg();
+        var on = !!c.godMode;
+        var block = '<div class="setsec">' +
+          '<div class="sechead">AI 裁决 · 上帝模式</div>' +
+          '<p class="tiny" style="margin:2px 0 0">开启后，AI 不会把你的行动判成被否决、被拖延或只办成一半：' +
+          'success 只接受「成功 / 大成功」两档，其余档位（含未执行、部分成功）整份结果直接作废、' +
+          '不产生任何效果。行动点照常消耗，数值上限与预算不变。</p>' +
+          '<div class="setopts">' +
+          '<span class="setopt' + (on ? '' : ' on') + '" onclick="AIUI.setGodMode(false)" title="按 AI 判断的档位正常结算">关闭</span>' +
+          '<span class="setopt' + (on ? ' on' : '') + '" onclick="AIUI.setGodMode(true)" title="AI 只能给成功/大成功">开启</span>' +
+          '</div>' +
+          '<div class="tiny" style="margin-top:6px">当前：<b>' + (on ? '已开启' : '未开启') + '</b>' +
+          (c.enabled ? '' : '（AI 模式本身是关闭状态）') + '</div>' +
+          '</div>';
+        var anchor = '<div style="text-align:right;margin-top:16px">';
+        if (html.indexOf(anchor) >= 0) html = html.replace(anchor, block + anchor);
+        else html = html.replace(/<\/div><\/div>$/, block + '</div></div>');
+      } catch (e) {}
+      return html;
     };
 
     /* 提交入口挂到 AIUI 上（界面里的 onclick 用的就是它） */

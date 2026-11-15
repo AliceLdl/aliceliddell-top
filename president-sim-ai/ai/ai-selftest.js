@@ -48,17 +48,30 @@
     check('函数覆写已安装', function () {
       var o = global.AIORIG || {};
       var diffs = ['presActionsPane', 'camp2ActionsHTML', 'pendingEventCard',
-                   'shockEvModalPane', 'crisisPane', 'modalHTML', 'gearBtnHTML']
+                   'shockEvModalPane', 'crisisPane', 'modalHTML', 'gearBtnHTML', 'settingsPane']
         .filter(function (k) { return typeof global[k] === 'function' && global[k] !== o[k]; });
-      return { ok: diffs.length >= 6, info: '覆写 ' + diffs.length + '/7：' + diffs.join(',') };
+      return { ok: diffs.length >= 8, info: '覆写 ' + diffs.length + '/8：' + diffs.join(',') };
     });
 
     check('系统提示词', function () {
       var s = global.AIPROMPT.system();
-      var must = ['裁决引擎', '数值字段', 'success', '执行结果档位', '只输出一个 JSON 对象'];
+      var must = ['运行环境声明', '裁决引擎', '数值字段', 'success', '执行结果档位', '只输出一个 JSON 对象'];
       var miss = must.filter(function (m) { return s.indexOf(m) < 0; });
       return { ok: !miss.length, info: '长度 ' + s.length + ' 字，约 ' +
         global.AICTX.estimateTokens(s) + ' token' + (miss.length ? '；缺少：' + miss.join(',') : '') };
+    });
+
+    check('档位校验（缺失作废 / 上帝模式只认两档）', function () {
+      var ADJ = global.AIADJ, c = global.AICFG, old = c.godMode;
+      var missing = ADJ.normalize({ headline: 'x', effects: { approval: 3 } }, 'national');
+      var badMissing = !missing.ok && missing.invalid === 'missing' && !Object.keys(missing.fx).length;
+      c.godMode = true;
+      var p = ADJ.normalize({ success: 'partial', apCost: 1, effects: { approval: 3 } }, 'national');
+      var s = ADJ.normalize({ success: 'success', apCost: 1, effects: { approval: 3 } }, 'national');
+      var badGod = !p.ok && p.invalid === 'god_rejected' && s.ok;
+      c.godMode = old;
+      return { ok: badMissing && badGod,
+        info: '缺档位作废=' + badMissing + ' / 上帝模式拒 partial 认 success=' + badGod };
     });
 
     check('五种模式的提示词组装', function () {

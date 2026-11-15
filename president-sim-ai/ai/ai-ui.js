@@ -727,11 +727,7 @@
       '<div class="ai-check"><input type="checkbox" id="ai-cv"' + (c.variance ? ' checked' : '') +
       ' onchange="AIUI.setCfg({variance:this.checked})"><label for="ai-cv" style="margin:0">数值随机扰动（±22%：同一句话的力度不会每次都一模一样；成败只由 AI 档位决定）</label></div>' +
 
-      '<div class="ai-check"><input type="checkbox" id="ai-gm"' + (c.godMode ? ' checked' : '') +
-      ' onchange="AIUI.setCfg({godMode:this.checked})"><label for="ai-gm" style="margin:0">上帝模式：行动不会失败或被阻碍（只改提示词；行动点照常消耗、数值上限照旧）</label></div>' +
-
-      '<div class="ai-check"><input type="checkbox" id="ai-of"' + (c.offlineFallback ? ' checked' : '') +
-      ' onchange="AIUI.setCfg({offlineFallback:this.checked})"><label for="ai-of" style="margin:0">接口不可用时用本地规则裁决（离线也能玩，但效果较粗）</label></div>' +
+      '<div class="ai-tiny" style="margin-top:6px">上帝模式已移到游戏主设置（齿轮 ⚙ → 「AI 裁决」）。</div>' +
 
       '<div class="ai-check"><input type="checkbox" id="ai-sc"' + (c.showClassic ? ' checked' : '') +
       ' onchange="AIUI.setCfg({showClassic:this.checked})"><label for="ai-sc" style="margin:0">保留原版内置行动/选项（折叠显示，备用）</label></div>' +
@@ -953,6 +949,15 @@
     global.AI.set(patch);
     if (typeof render === 'function') render();
   }
+  /* 上帝模式：入口在游戏主设置（齿轮 → AI 裁决），这里只做状态切换 */
+  function setGodMode(v) {
+    global.AI.set({ godMode: !!v });
+    if (typeof showToast === 'function') {
+      showToast(v ? '上帝模式已开启：AI 只会返回「成功 / 大成功」，其余档位一律作废。'
+                  : '上帝模式已关闭。');
+    }
+    if (typeof render === 'function') render();
+  }
   function usePreset(id) {
     global.AI.usePreset(id);
     UI_STATE.test = null;
@@ -1005,8 +1010,15 @@
   function preview() {
     var p = global.AIPROMPT.build('national', global.AICTX.text('national'),
       UI_STATE.draft.national || '（这里会显示你输入的行动）', {});
+    /* 沙盘声明属于内部运行设定，预览里不显示（避免被当成可编辑提示词） */
+    var sand = global.AIPROMPT.SAND || '';
+    var sandTail = global.AIPROMPT.SAND_TAIL || '';
+    var sysText = sand && p.system.indexOf(sand) === 0
+      ? p.system.slice(sand.length + 2) : p.system;
+    var userText = sandTail && p.user.indexOf(sandTail) >= 0
+      ? p.user.split(sandTail).join('') : p.user;
     UI_STATE.preview = {
-      system: p.system, user: p.user,
+      system: sysText, user: userText,
       sysTok: global.AICTX.estimateTokens(p.system),
       userTok: global.AICTX.estimateTokens(p.user)
     };
@@ -1101,6 +1113,7 @@
     modalFor: modalFor,
     setDraft: setDraft, setTab: setTab, setPromptMode: setPromptMode,
     setPrompt: setPrompt, setCfg: setCfg, usePreset: usePreset, useProxy: useProxy,
+    setGodMode: setGodMode,
     open: open, close: close, openHistory: openHistory,
     clearHistory: clearHistory, resetAll: resetAll, preview: preview, test: test,
     fetchModels: fetchModels, setModelByIdx: setModelByIdx,
