@@ -38,6 +38,8 @@
     showClassic: false,
     /* 数值上限倍率：0.6 保守 / 1.0 标准 / 1.5 宽松 */
     strict: 1.0,
+    /* 上帝模式：只改提示词（AI 一律判成功、不写任何阻力）。行动点照常消耗、数值上限照旧 */
+    godMode: false,
     /* 大模型能看到的「前情提要」，你自己写，会随每次请求发送 */
     memory: '',
     /* 自定义请求头（custom 协议用），JSON 字符串 */
@@ -91,6 +93,11 @@
       model: 'anthropic/claude-3.5-sonnet',
       fallback: ['anthropic/claude-3.5-sonnet', 'openai/gpt-4o', 'google/gemini-2.0-flash-001', 'deepseek/deepseek-chat'],
       note: '一个 key 调多家模型，需要能访问外网。' },
+    { id: 'opencode',  cn: 'OpenCode / DSH 网关', baseUrl: 'https://opencode.ai/inference/go/v1',
+      model: 'deepseek-v4.1-flash',
+      fallback: ['deepseek-v4.1-flash', 'deepseek-chat', 'deepseek-reasoner'],
+      note: 'OpenAI 兼容协议。浏览器直连会被 CORS 挡下（对方不回 Access-Control-Allow-Origin），' +
+            '点下面的「改用本地代理」按钮，用 node ai/proxy.js 转发即可。' },
     { id: 'anthropic', cn: 'Anthropic Claude', baseUrl: 'https://api.anthropic.com',
       model: 'claude-sonnet-4-20250514',
       fallback: ['claude-sonnet-4-20250514', 'claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest'],
@@ -239,7 +246,7 @@
     var p = providerPreset(id);
     var patch = { provider: (id === 'deepseek' || id === 'moonshot' || id === 'zhipu' ||
                              id === 'qwen' || id === 'silicon' || id === 'openrouter' ||
-                             id === 'proxy' || id === 'openai') ? 'openai' : id };
+                             id === 'opencode' || id === 'proxy' || id === 'openai') ? 'openai' : id };
     if (p.baseUrl) patch.baseUrl = p.baseUrl;
     if (p.model) patch.model = p.model;
     if (id === 'proxy') patch.provider = 'openai';

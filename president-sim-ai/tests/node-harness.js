@@ -262,9 +262,11 @@ t('竞选模式带民调与竞选数值', () => {
 console.log('\n[3] 提示词');
 t('系统提示词覆盖关键规则', () => {
   const s = PROMPT.system();
-  const must = ['裁决引擎', '数值字段', 'ok:false', '幅度基准', '只输出一个 JSON 对象', 'relations', 'sectors', '叙事账本'];
+  const must = ['裁决引擎', '数值字段', 'success', '幅度基准', '只输出一个 JSON 对象', 'relations', 'sectors', '叙事账本'];
   const miss = must.filter(m => s.indexOf(m) < 0);
   if (miss.length) throw new Error('缺少 ' + miss.join(','));
+  if (s.indexOf('执行结果档位') < 0) throw new Error('缺执行结果档位一节');
+  if (s.indexOf('partial') < 0 || s.indexOf('triumph') < 0) throw new Error('档位枚举缺失');
   return { info: s.length + ' 字 ≈ ' + CTX.estimateTokens(s) + ' token' };
 });
 t('八种任务模板都能组装', () => {
@@ -397,7 +399,7 @@ t('设置面板有拉取按钮、候选与缓存状态', () => {
 /* 5. 校验与限幅 */
 console.log('\n[5] 归一化与限幅');
 t('越界值被夹到上限', () => {
-  const n = ADJ.normalize({ ok: true, apCost: 99, effects: { approval: 999, gdp: -9, tension: 100 } }, 'national');
+  const n = ADJ.normalize({ success: 'success', apCost: 99, effects: { approval: 999, gdp: -9, tension: 100 } }, 'national');
   if (n.apCost !== 3) throw new Error('apCost 未限幅：' + n.apCost);
   if (Math.abs(n.fx.appr) > 6) throw new Error('approval 未限幅：' + n.fx.appr);
   if (Math.abs(n.fx.gdp) > 0.3) throw new Error('gdp 未限幅：' + n.fx.gdp);
@@ -405,34 +407,93 @@ t('越界值被夹到上限', () => {
   return { info: 'apCost=' + n.apCost + ' appr=' + n.fx.appr + ' gdp=' + n.fx.gdp };
 });
 t('字符串数字被强制转成 number', () => {
-  const n = ADJ.normalize({ ok: true, effects: { gdp: '0.12', approval: '-1.5' } }, 'national');
+  const n = ADJ.normalize({ success: 'success', effects: { gdp: '0.12', approval: '-1.5' } }, 'national');
   if (typeof n.fx.gdp !== 'number' || n.fx.gdp !== 0.12) throw new Error('gdp 未转换');
   if (n.fx.appr !== -1.5) throw new Error('appr 未转换');
   return { info: 'OK' };
 });
 t('未知国家/行业被丢弃', () => {
-  const n = ADJ.normalize({ ok: true, effects: { relations: { ZZ: -5, CN: -4 }, sectors: { nope: 3, energy: 2 } } }, 'national');
+  const n = ADJ.normalize({ success: 'success', effects: { relations: { ZZ: -5, CN: -4 }, sectors: { nope: 3, energy: 2 } } }, 'national');
   if (n.rel.ZZ !== undefined) throw new Error('未知国家未丢弃');
   if (n.corp.nope !== undefined) throw new Error('未知行业未丢弃');
   if (n.rel.CN !== -4 || n.corp.energy !== 2) throw new Error('已知键被误删');
   return { info: 'rel=' + JSON.stringify(n.rel) + ' corp=' + JSON.stringify(n.corp) };
 });
 t('非法法案主题回落 + 方向限幅', () => {
-  const n = ADJ.normalize({ ok: true, bill: { title: '法案', topic: '胡说', direction: 50 } }, 'national');
+  const n = ADJ.normalize({ success: 'success', bill: { title: '法案', topic: '胡说', direction: 50 } }, 'national');
   if (!n.bill || n.bill.topic !== '经济税收') throw new Error('主题未回落');
   if (n.bill.dir !== 10) throw new Error('方向未限幅：' + n.bill.dir);
   return { info: n.bill.topic + ' / dir=' + n.bill.dir };
 });
 t('拒绝时清空所有数值', () => {
-  const n = ADJ.normalize({ ok: false, rejectReason: '越权', effects: { approval: 5 }, apCost: 2 }, 'national');
+  const n = ADJ.normalize({ success: 'none', rejectReason: '越权', effects: { approval: 5 }, apCost: 2 }, 'national');
   if (n.ok !== false) throw new Error('ok 应为 false');
   if (Object.keys(n.fx).length || n.apCost !== 0) throw new Error('拒绝后仍带数值');
   return { info: n.rejectReason };
 });
+t('五个档位都能识别（含中文别名、数字与旧 ok 字段）', () => {
+  const cases = [
+    ['none', 'none'], ['未执行', 'none'], ['rejected', 'none'], [0, 'none'],
+    ['fail', 'fail'], ['执行失败', 'fail'], [1, 'fail'],
+    ['partial', 'partial'], ['部分成功', 'partial'], [2, 'partial'],
+    ['success', 'success'], ['成功', 'success'], [3, 'success'],
+    ['triumph', 'triumph'], ['大成功', 'triumph'], [4, 'triumph']
+  ];
+  for (const [v, want] of cases) {
+    const got = ADJ.parseGrade({ success: v });
+    if (got !== want) throw new Error(String(v) + ' → ' + got + '（应为 ' + want + '）');
+  }
+  if (ADJ.parseGrade({ ok: false }) !== 'none') throw new Error('旧 ok:false 未映射到 none');
+  if (ADJ.parseGrade({ ok: true }) !== 'success') throw new Error('旧 ok:true 未映射到 success');
+  if (ADJ.parseGrade({}) !== 'success') throw new Error('缺字段应默认 success');
+  return { info: cases.length + ' 个别名 + 旧 ok 兼容' };
+});
+t('档位折算系数正确，且同一档位结果恒定（不再掷骰）', () => {
+  const base = { apCost: 1, effects: { approval: 4, tension: 6, division: 2 } };
+  const expect = { fail: [0.35, 1.10], partial: [0.70, 1.00], success: [1, 1], triumph: [1.15, 0.85] };
+  const info = [];
+  A.set({ variance: false });
+  for (const g of Object.keys(expect)) {
+    let first = null;
+    for (let i = 0; i < 12; i++) {
+      const n = ADJ.gate(ADJ.normalize(Object.assign({ success: g }, base), 'national'));
+      const sig = [n.fx.appr, n.fx.tension, n.div].join(',');
+      if (first == null) first = sig;
+      else if (sig !== first) throw new Error(g + ' 档位结果不稳定：' + sig + ' ≠ ' + first);
+    }
+    const n = ADJ.gate(ADJ.normalize(Object.assign({ success: g }, base), 'national'));
+    const pos = expect[g][0], neg = expect[g][1];
+    if (Math.abs(n.fx.appr - 4 * pos) > 1e-6) throw new Error(g + ' 正效果系数错：' + n.fx.appr);
+    if (Math.abs(n.fx.tension - 6 * neg) > 1e-6) throw new Error(g + ' 负效果系数错：' + n.fx.tension);
+    if (Math.abs(n.div - 2 * neg) > 1e-6) throw new Error(g + ' division 系数错：' + n.div);
+    if (g === 'fail' && !n.stumble) throw new Error('fail 档没有标记受挫');
+    if (g !== 'fail' && n.stumble) throw new Error(g + ' 档不该标记受挫');
+    info.push(g + ' ' + pos + '/' + neg);
+  }
+  A.set({ variance: true });
+  return { info: info.join(' · ') };
+});
+t('上帝模式只改提示词，行动点照常扣', () => {
+  A.set({ godMode: true });
+  const s = PROMPT.system();
+  if (s.indexOf('上帝模式') < 0) throw new Error('提示词里没有上帝模式');
+  if (s.indexOf('"triumph"') < 0) throw new Error('上帝模式没约束档位');
+  const apBefore = G.ap;
+  G.ap = 3;
+  const n = ADJ.gate(ADJ.normalize({ success: 'success', apCost: 2, headline: '测试', narrative: '测试。',
+    effects: { approval: 1 } }, 'national'));
+  const sum = ADJ.apply(n, 'national', { input: '测试', source: 'ai' });
+  if (G.ap !== 1) throw new Error('上帝模式不该免掉行动点：剩 ' + G.ap);
+  if (!sum.ok) throw new Error('结算失败');
+  A.set({ godMode: false });
+  if (PROMPT.system().indexOf('上帝模式') >= 0) throw new Error('关掉后提示词仍带上帝模式');
+  G.ap = apBefore;
+  return { info: '3 AP − 2 → 1 AP，提示词 +' + PROMPT.GOD.length + ' 字' };
+});
 t('总量预算会缩放', () => {
   let scaled = 0;
   for (let i = 0; i < 30; i++) {
-    const raw = { ok: true, apCost: 1, effects: {
+    const raw = { success: 'success', apCost: 1, effects: {
       approval: 6, gdp: 0.3, unemployment: -0.3, inflation: 0.2, confidence: 6,
       stock: 6, tension: 12, division: 5, politicalCapital: 8, deficit: 0.3,
       relations: { CN: -15, RU: -15 }, sectors: { energy: 10, defense: 10 } } };
@@ -448,7 +509,7 @@ console.log('\n[6] 结算管线');
 t('数值进入引擎并被记录', () => {
   const before = G.pres.appr, apBefore = G.ap;
   applied.length = 0; logs.length = 0;
-  const raw = { ok: true, headline: '全国讲话', narrative: '你在椭圆形办公室发表讲话。',
+  const raw = { success: 'success', headline: '全国讲话', narrative: '你在椭圆形办公室发表讲话。',
     apCost: 1, difficulty: 0, risk: 'low',
     effects: { approval: 2, gdp: 0.1, tension: 2, division: 1,
                relations: { CN: -4 }, sectors: { energy: 3 } },
@@ -469,14 +530,14 @@ t('数值进入引擎并被记录', () => {
 });
 t('拒绝时不扣 AP、不写数值', () => {
   const apBefore = G.ap;
-  const n = ADJ.normalize({ ok: false, rejectReason: '总统无权直接命令美联储' }, 'national');
+  const n = ADJ.normalize({ success: 'none', rejectReason: '总统无权直接命令美联储' }, 'national');
   const s = ADJ.apply(n, 'national', { input: '命令美联储降息', source: 'ai' });
   if (s.ok) throw new Error('应标记失败');
   if (G.ap !== apBefore) throw new Error('拒绝却扣了行动点');
   return { info: s.rejectReason };
 });
 t('竞选数值走 applyCampFx 同款口径', () => {
-  const raw = { ok: true, apCost: 1, campaign: {
+  const raw = { success: 'success', apCost: 1, campaign: {
     momentum: 0.1, funds: -12, energy: -8,
     stats: { nameRec: 1.2, enthusiasm: 0.5 }, visits: { PA: 2 }, stateLift: { PA: 1.5 } } };
   const fundsBefore = G.campaign.funds;
@@ -521,7 +582,7 @@ const LEDGER_FIXTURE = {
 
 t('裁决把两层账都写进去', () => {
   LED.reset();
-  const raw = { ok: true, headline: '对伊朗加压', narrative: '测试。', apCost: 1,
+  const raw = { success: 'success', headline: '对伊朗加压', narrative: '测试。', apCost: 1,
     effects: { approval: -0.5, tension: 3 }, ledger: LEDGER_FIXTURE };
   const n = ADJ.gate(ADJ.normalize(raw, 'national'));
   const s = ADJ.apply(n, 'national', { input: '制裁伊朗', source: 'ai' });
@@ -622,7 +683,7 @@ t('本地压缩可去重（离线兜底）', () => {
 });
 t('拒绝只写内部档案、不写简报', () => {
   LED.reset();
-  const raw = { ok: false, rejectReason: '总统无权直接命令美联储',
+  const raw = { success: 'none', rejectReason: '总统无权直接命令美联储',
     ledger: { dossier: { facts: ['总统曾试图直接命令美联储降息'] } } };
   const n = ADJ.normalize(raw, 'national');
   ADJ.apply(n, 'national', { input: '命令美联储', source: 'ai' });

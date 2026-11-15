@@ -25,7 +25,37 @@
 
   /* ------------------------------------------------------------------ *
    * URL 归一化
+   *   · 没写协议就补：本机地址补 http://，其他补 https://
+   *   · 粘了完整端点（…/chat/completions、…/messages）就退回 base
+   *   · 末尾斜杠统一去掉
    * ------------------------------------------------------------------ */
+  function normalizeBase(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (!s) return '';
+    s = s.replace(/\/+$/, '');
+    s = s.replace(/\/chat\/completions$/i, '')
+         .replace(/\/completions$/i, '')
+         .replace(/\/messages$/i, '')
+         .replace(/\/+$/, '');
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) {
+      if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(\/|$)/i.test(s)) s = 'http://' + s;
+      else s = 'https://' + s;
+    }
+    return s;
+  }
+
+  function baseUrl() {
+    var c = cfg();
+    var b = normalizeBase(c.baseUrl);
+    if (!b) {
+      var prov = c.provider || 'openai';
+      if (prov === 'anthropic') return 'https://api.anthropic.com';
+      if (prov === 'gemini') return 'https://generativelanguage.googleapis.com/v1beta';
+      return 'https://api.openai.com/v1';
+    }
+    return b;
+  }
+
   function joinUrl(base, path) {
     var b = String(base || '').trim();
     if (!b) return path;
@@ -41,16 +71,17 @@
   function endpointFor() {
     var c = cfg();
     var prov = c.provider || 'openai';
+    var b = baseUrl();
     if (prov === 'anthropic') {
-      return joinUrl(c.baseUrl || 'https://api.anthropic.com', '/v1/messages');
+      /* base 已经带 /v1 时不要再叠一层 */
+      return (/\/v1$/.test(b) ? b : b + '/v1') + '/messages';
     }
     if (prov === 'gemini') {
-      var base = String(c.baseUrl || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '');
-      if (/generateContent/.test(base)) return base;
-      return base + '/models/' + encodeURIComponent(c.model || 'gemini-2.0-flash') +
+      if (/generateContent/.test(b)) return b;
+      return b + '/models/' + encodeURIComponent(c.model || 'gemini-2.0-flash') +
              ':generateContent?key=' + encodeURIComponent(c.apiKey || '');
     }
-    return joinUrl(c.baseUrl || 'https://api.openai.com/v1', '/chat/completions');
+    return joinUrl(b, '/chat/completions');
   }
 
   /* ------------------------------------------------------------------ *
@@ -182,7 +213,10 @@
       clearTimeout(timer);
       if (e && e.name === 'AbortError') throw new Error('拉取模型列表超时（25 秒）。');
       if (e && e.message && /Failed to fetch|NetworkError|Load failed/i.test(e.message)) {
-        throw new Error('网络请求失败（该接口可能不允许浏览器直连，可改用 ai/proxy.js）。');
+        var me = new Error('网络请求失败（GET ' + url.replace(/key=[^&]+/, 'key=***') + '）：' +
+          '该接口不允许浏览器直连，或地址写错。可改用 ai/proxy.js。');
+        me.endpoint = url;
+        throw me;
       }
       throw e;
     });
@@ -379,10 +413,11 @@
           throw new Error('请求超时（' + Math.round(timeout / 1000) + ' 秒）。可在 AI 设置里调大超时时间。');
         }
         if (e && e.message && /Failed to fetch|NetworkError|Load failed/i.test(e.message)) {
-          var hint = '网络请求失败。常见原因：① 该 API 不允许浏览器直连（CORS）→ 用 ai/proxy.js；' +
-                     '② 地址写错；③ 需要代理才能访问。';
-          var ne = new Error(hint);
+          var ne = new Error('网络请求失败（POST ' + url.replace(/key=[^&]+/, 'key=***') + '）。' +
+            '常见原因：① 该接口不允许浏览器直连（CORS 预检被拒）→ 用 ai/proxy.js；' +
+            '② 地址写错或缺协议头；③ 页面是 https 却调 http（混合内容被拦）。');
           ne.network = true;
+          ne.endpoint = url;
           throw ne;
         }
         throw e;

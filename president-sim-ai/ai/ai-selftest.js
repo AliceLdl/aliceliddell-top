@@ -55,7 +55,7 @@
 
     check('系统提示词', function () {
       var s = global.AIPROMPT.system();
-      var must = ['裁决引擎', '数值字段', 'ok:false', '只输出一个 JSON 对象'];
+      var must = ['裁决引擎', '数值字段', 'success', '执行结果档位', '只输出一个 JSON 对象'];
       var miss = must.filter(function (m) { return s.indexOf(m) < 0; });
       return { ok: !miss.length, info: '长度 ' + s.length + ' 字，约 ' +
         global.AICTX.estimateTokens(s) + ' token' + (miss.length ? '；缺少：' + miss.join(',') : '') };
@@ -103,7 +103,7 @@
 
     check('数值限幅（越界与字符串）', function () {
       var raw = {
-        ok: true, headline: '测试', narrative: '测试文本。', apCost: 9, difficulty: 0.5,
+        success: 'success', headline: '测试', narrative: '测试文本。', apCost: 9,
         risk: 'bogus',
         effects: {
           approval: 999, gdp: '-0.2', unemployment: 0, tension: 80, division: 30,
@@ -141,7 +141,7 @@
     });
 
     check('总量预算生效', function () {
-      var raw = { ok: true, apCost: 1, effects: {
+      var raw = { success: 'success', apCost: 1, effects: {
         approval: 6, gdp: 0.3, unemployment: -0.3, inflation: 0.2, confidence: 6,
         stock: 6, tension: 12, division: 5, politicalCapital: 8, deficit: 0.3,
         relations: { CN: -15, RU: -15 }, sectors: { energy: 10, defense: 10 } } };
@@ -150,6 +150,45 @@
       var scaled = /缩放/.test(notes);
       return { ok: true, info: '预算判定：' + (scaled ? '已缩放' : '未触发（当前随机扰动下仍可接受）') +
         '；备注 ' + (notes || '无') };
+    });
+
+    check('执行档位（success）与确定性折算', function () {
+      var grades = ['none', 'fail', 'partial', 'success', 'triumph'];
+      var alias = 0, miss = [];
+      ['未执行', '执行失败', '部分成功', '成功', '大成功'].forEach(function (cn) {
+        if (grades.indexOf(global.AIADJ.parseGrade({ success: cn })) >= 0) alias++;
+        else miss.push(cn);
+      });
+      var v = global.AICFG.variance;
+      global.AICFG.variance = false;
+      var seen = {};
+      try {
+        grades.slice(1).forEach(function (id) {
+          var n = global.AIADJ.gate(global.AIADJ.normalize(
+            { success: id, apCost: 1, effects: { approval: 4, tension: 4 } }, 'national'));
+          seen[id] = n.fx.appr + '/' + n.fx.tension;
+        });
+      } finally { global.AICFG.variance = v; }
+      var ok = alias === 5 &&
+        seen.fail === '1.4/4.4' && seen.partial === '2.8/4' &&
+        seen.success === '4/4' && seen.triumph === '4.6/3.4';
+      return { ok: ok, info: '中文档名 ' + alias + '/5' + (miss.length ? '（缺 ' + miss.join(',') + '）' : '') +
+        '；折算 ' + JSON.stringify(seen) };
+    });
+
+    check('上帝模式只改提示词、不动扣点逻辑', function () {
+      var c = global.AICFG, old = c.godMode;
+      c.godMode = true;
+      var s = global.AIPROMPT.system();
+      c.godMode = false;
+      var off = global.AIPROMPT.system();
+      c.godMode = old;
+      var promptOK = s.indexOf('上帝模式') >= 0 && s.indexOf('"triumph"') >= 0 &&
+                     off.indexOf('上帝模式') < 0 && s.length > off.length;
+      var applySrc = global.AIADJ.apply.toString();
+      var clean = applySrc.indexOf('godMode') < 0;
+      return { ok: promptOK && clean,
+        info: '提示词 +' + (s.length - off.length) + ' 字；apply 里无上帝模式分支=' + clean };
     });
 
     check('离线兜底裁决', function () {
@@ -249,8 +288,8 @@
       if (!g || g.phase !== 'setup') return { ok: true, info: '跳过：当前不是开局状态，避免污染存档' };
       var backup = JSON.stringify(g);
       var apBefore = g.ap;
-      var raw = { ok: true, headline: '测试结算', narrative: '这是一次自检结算。', apCost: 2,
-        difficulty: 0.1, risk: 'medium',
+      var raw = { success: 'success', headline: '测试结算', narrative: '这是一次自检结算。', apCost: 2,
+        risk: 'medium',
         effects: { approval: 2, gdp: 0.1, tension: 2, division: 1,
                    relations: { CN: -5 }, sectors: { energy: 3 } },
         bill: { title: '自检法案', topic: '经济税收', direction: 3, summary: '仅用于自检' } };

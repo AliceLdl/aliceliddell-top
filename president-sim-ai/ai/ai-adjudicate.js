@@ -5,7 +5,9 @@
    模型给出的数字不能直接进引擎：这里做四道关。
      1) 字段白名单 + 类型校验（不认识的一律丢弃，绝不把字符串写进经济引擎）
      2) 分项硬上限（与提示词里的区间一致，再乘「严格度」倍率）
-     3) 难度判定：按 difficulty 掷一次成功判定，失败则正面效果打对折
+     3) 执行档位折算：成败由模型返回的 success 档位决定（none / fail / partial /
+     success / triumph），按档位乘固定系数 —— 引擎不再掷骰子，同一档位永远是
+     同一个结果，玩家的成败只来自 AI 的判定
      4) 总量预算：一条指令能造成的影响总和有上限，超了按比例缩
    最后调用原版引擎的 applyFx / applyCampFx / makeCustomBill，
    让效果照常进入「经济冲量队列」「州级情绪」「法案排期」等机制。
@@ -24,6 +26,32 @@
 
   /* 每条指令允许的「影响总量」（加权和，1.0 ≈ 一次像样的行动） */
   var BUDGET_BASE = 3.2, BUDGET_PER_AP = 2.0;
+
+  /* ------------------------------------------------------------------ *
+   * 执行档位（取代原来的 ok:true/false + 随机成功判定）
+   *   none     未执行：指令越权/不可能/无效 —— 不扣行动点，不改任何数值
+   *   fail     执行失败：做了，砸了 —— 照扣行动点，正效果 ×0.35、负效果 ×1.10
+   *   partial  部分成功 —— 正效果 ×0.70，负效果照旧
+   *   success  成功 —— 原样结算
+   *   triumph  大成功 —— 正效果 ×1.15，负效果 ×0.85
+   * 系数是确定性的：同一档位 + 同一模型输出 = 同一结果，不存在引擎掷骰子。
+   * ------------------------------------------------------------------ */
+  var GRADES = [
+    { id: 'none',    idx: 0, cn: '未执行', pos: 0,    neg: 0,    ok: false,
+      tags: ['none', 'not_executed', 'notexecuted', 'reject', 'rejected', 'skipped', 'none_executed', '未执行', '没执行', '拒绝', '无效'] },
+    { id: 'fail',    idx: 1, cn: '执行失败',   pos: 0.35, neg: 1.10, ok: true,
+      tags: ['fail', 'failed', 'failure', 'lose', 'loss', '失败', '执行失败', '翻车'] },
+    { id: 'partial', idx: 2, cn: '部分成功',   pos: 0.70, neg: 1.00, ok: true,
+      tags: ['partial', 'partly', 'half', 'mixed', '部分成功', '部分', '打了折扣'] },
+    { id: 'success', idx: 3, cn: '成功',       pos: 1.00, neg: 1.00, ok: true,
+      tags: ['success', 'succeed', 'ok', 'done', 'yes', '成功', '达成'] },
+    { id: 'triumph', idx: 4, cn: '大成功',     pos: 1.15, neg: 0.85, ok: true,
+      tags: ['triumph', 'great', 'perfect', 'outstanding', '很好', '大成功', '超预期'] }
+  ];
+  var GRADE_BY_ID = {};
+  GRADES.forEach(function (g) { GRADE_BY_ID[g.id] = g; });
+
+  function gradeOf(id) { return GRADE_BY_ID[id] || GRADE_BY_ID.success; }
 
   var CN = {
     appr: '支持率', gdp: '经济增长', unemp: '失业率', infl: '通胀', conf: '信心',
@@ -71,13 +99,39 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * 4. 难度判定 + 随机扰动
+   * 4. 执行档位解析（替代原来的随机成功判定）+ 随机扰动
    * ------------------------------------------------------------------ */
-  function rollSuccess(difficulty) {
-    if (!cfg().variance) return true;
-    var d = Math.max(0, Math.min(1, num(difficulty, 0.4)));
-    var p = Math.max(0.22, Math.min(0.95, 1.08 - 0.66 * d));
-    return Math.random() < p;
+  /* 模型可能返回的写法全都收：数字档位、布尔、英文档名、中文档名、旧版 ok 字段 */
+  function parseGrade(raw) {
+    if (!raw || typeof raw !== 'object') return 'none';
+    var v = raw.success;
+    if (v == null) v = raw['结果'];
+    if (v == null) v = raw.grade;
+    if (v == null) v = raw.result;
+    /* 旧版契约：只有 ok */
+    if (v == null && raw.ok != null) return raw.ok === false ? 'none' : 'success';
+
+    if (typeof v === 'boolean') return v ? 'success' : 'none';
+    if (typeof v === 'number') {
+      var i = Math.round(Math.max(0, Math.min(GRADES.length - 1, v)));
+      return GRADES[i].id;
+    }
+    var s = String(v == null ? '' : v).trim().toLowerCase()
+      .replace(/[\s_\-]+/g, '').replace(/["'「」【】]/g, '');
+    if (!s) return 'success';
+    for (var k = 0; k < GRADES.length; k++) {
+      var g = GRADES[k];
+      for (var j = 0; j < g.tags.length; j++) {
+        var t = String(g.tags[j]).toLowerCase().replace(/[\s_\-]+/g, '');
+        if (s === t) return g.id;
+      }
+    }
+    /* 包含关系兜底：「部分成功（但代价很大）」也能认出来 */
+    if (/未执行|没执行|拒绝|refus|reject|notexecut|^none/.test(s)) return 'none';
+    if (/部分|partial|partly|一半/.test(s)) return 'partial';
+    if (/大成功|超预期|triumph|great|perfect/.test(s)) return 'triumph';
+    if (/失败|fail|翻车/.test(s)) return 'fail';
+    return 'success';
   }
 
   function jitter(v) {
@@ -85,23 +139,41 @@
     return v * (0.78 + Math.random() * 0.44);   /* ±22% */
   }
 
+  /* 按档位折算一个数值。
+     注意「正/负效果」指对总统有利还是有害，不看数字正负：
+     失业率 +0.3 是坏事，紧张度 -5 才是好事。 */
+  var UP_IS_BAD = {
+    unemp: 1, infl: 1, debt: 1, tension: 1, div: 1, def: 1, deficit: 1, scandalHeat: 1
+  };
+  function gradeScale(v, g, upIsBad) {
+    var n = num(v, 0);
+    if (!n) return 0;
+    var good = upIsBad ? n < 0 : n > 0;
+    return n * (good ? g.pos : g.neg);
+  }
+
   /* ------------------------------------------------------------------ *
    * 归一化：把模型的 JSON 变成引擎可用的结构
    * ------------------------------------------------------------------ */
   function normalize(raw, mode, ctx) {
     var out = {
-      ok: true, headline: '', narrative: '', apCost: 0, difficulty: 0.4,
+      ok: true, success: 'success', grade: 3, gradeCN: '成功',
+      headline: '', narrative: '', apCost: 0, difficulty: 0.4,
       risk: 'low', tone: '', followup: '', rejectReason: '',
       fx: {}, div: 0, def: 0, rel: {}, corp: {}, bill: null, flags: [],
       campaign: null, notes: [], ledger: null, raw: raw
     };
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-      out.ok = false;
+      out.ok = false; out.success = 'none'; out.grade = 0; out.gradeCN = '未执行';
       out.rejectReason = '模型返回的不是一个对象。';
       return out;
     }
 
-    if (raw.ok === false) out.ok = false;
+    var grade = gradeOf(parseGrade(raw));
+    out.success = grade.id;
+    out.grade = grade.idx;
+    out.gradeCN = grade.cn;
+    out.ok = grade.ok;
 
     out.headline = cleanText(raw.headline, 40);
     out.narrative = cleanText(raw.narrative, 700);
@@ -241,11 +313,11 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * 难度判定与总量预算（在 normalize 之后、apply 之前）
+   * 档位折算与总量预算（在 normalize 之后、apply 之前）
    * ------------------------------------------------------------------ */
   function gate(norm) {
     if (!norm.ok) return norm;
-    var success = rollSuccess(norm.difficulty);
+    var g = gradeOf(norm.success);
 
     /* 1) 抖动 */
     var k;
@@ -263,24 +335,33 @@
       for (k in norm.campaign.stateLift) norm.campaign.stateLift[k] = jitter(norm.campaign.stateLift[k]);
     }
 
-    /* 2) 成功判定：失败则正面效果对折（负面照旧，甚至略放大） */
-    if (!success) {
-      for (k in norm.fx) {
-        if (norm.fx[k] > 0) norm.fx[k] *= 0.45;
-        else norm.fx[k] *= 1.08;
-      }
-      for (k in norm.rel) if (norm.rel[k] > 0) norm.rel[k] *= 0.45;
-      for (k in norm.corp) if (norm.corp[k] > 0) norm.corp[k] *= 0.45;
-      if (norm.div > 0) norm.div *= 1.08;
+    /* 2) 档位折算：确定性，不再掷骰子 —— 成功/失败只由模型返回的 success 决定 */
+    norm.success = g.id;
+    norm.grade = g.idx;
+    norm.gradeCN = g.cn;
+    if (g.pos !== 1 || g.neg !== 1) {
+      for (k in norm.fx) norm.fx[k] = gradeScale(norm.fx[k], g, UP_IS_BAD[k]);
+      for (k in norm.rel) norm.rel[k] = gradeScale(norm.rel[k], g, 0);
+      for (k in norm.corp) norm.corp[k] = gradeScale(norm.corp[k], g, 0);
+      norm.div = gradeScale(norm.div, g, 1);
+      norm.def = gradeScale(norm.def, g, 1);
       if (norm.campaign) {
-        if (norm.campaign.momentum > 0) norm.campaign.momentum *= 0.45;
+        norm.campaign.momentum = gradeScale(norm.campaign.momentum, g, 0);
+        norm.campaign.funds = gradeScale(norm.campaign.funds, g, 0);
+        norm.campaign.energy = gradeScale(norm.campaign.energy, g, 0);
         for (k in norm.campaign.stats) {
-          if (norm.campaign.stats[k] > 0 && k !== 'adSpend') norm.campaign.stats[k] *= 0.45;
+          if (k === 'adSpend') continue;                 /* 花出去的钱不打折 */
+          norm.campaign.stats[k] = gradeScale(norm.campaign.stats[k], g, UP_IS_BAD[k]);
         }
-        for (k in norm.campaign.stateLift) if (norm.campaign.stateLift[k] > 0) norm.campaign.stateLift[k] *= 0.45;
+        for (k in norm.campaign.visits) {
+          norm.campaign.visits[k] = Math.max(0, gradeScale(norm.campaign.visits[k], g, 0));
+        }
+        for (k in norm.campaign.stateLift) {
+          norm.campaign.stateLift[k] = gradeScale(norm.campaign.stateLift[k], g, 0);
+        }
       }
-      norm.notes.push('执行受挫（difficulty ' + round(norm.difficulty, 2) + '）');
-      norm.stumble = true;
+      norm.notes.push('结算档位：' + g.cn + '（有利效果 ×' + g.pos + '，不利效果 ×' + g.neg + '）');
+      norm.stumble = (g.id === 'fail');
     }
 
     /* 3) 总量预算 */
@@ -381,6 +462,9 @@
     var g = global.AIG.g();
     var summary = {
       ok: !!(norm && norm.ok), headline: norm ? norm.headline : '',
+      success: norm ? (norm.success || 'success') : 'none',
+      grade: norm ? (norm.grade == null ? 3 : norm.grade) : 0,
+      gradeCN: norm ? (norm.gradeCN || '成功') : '未执行',
       narrative: norm ? norm.narrative : '', apCost: norm ? norm.apCost : 0,
       risk: norm ? norm.risk : 'low', tone: norm ? norm.tone : '',
       followup: norm ? norm.followup : '', rejectReason: norm ? norm.rejectReason : '',
@@ -510,7 +594,8 @@
       g.aiLog.push({
         y: g.y, w: g.w, mode: mode, input: String(meta.input || '').slice(0, 200),
         headline: norm.headline, narrative: norm.narrative, apCost: ap,
-        ok: true, source: summary.source, provider: (cfg().provider || ''),
+        ok: true, success: norm.success, gradeCN: norm.gradeCN,
+        source: summary.source, provider: (cfg().provider || ''),
         model: (cfg().model || ''), at: global.AI.nowText(),
         chips: summary.chips
       });
@@ -609,7 +694,7 @@
     var r = null, rule = null;
     if (mode === 'campaign') {
       rule = pickRule(CAMP_RULES, text);
-      r = { ok: true, apCost: 1, difficulty: 0.4, risk: 'low', tone: '程序性', effects: {} };
+      r = { success: 'success', apCost: 1, risk: 'low', tone: '程序性', effects: {} };
       if (rule) {
         r.apCost = rule.ap || 1;
         r.campaign = {
@@ -630,7 +715,7 @@
     }
 
     rule = pickRule(RULES, text);
-    r = { ok: true, apCost: 1, difficulty: 0.4, risk: 'low', tone: '程序性', effects: {} };
+    r = { success: 'success', apCost: 1, risk: 'low', tone: '程序性', effects: {} };
     if (rule) {
       r.apCost = rule.ap || 1;
       r.effects = {
@@ -659,6 +744,9 @@
 
   global.AIADJ = {
     CAP: CAP,
+    GRADES: GRADES,
+    gradeOf: gradeOf,
+    parseGrade: parseGrade,
     normalize: normalize,
     gate: gate,
     apply: apply,

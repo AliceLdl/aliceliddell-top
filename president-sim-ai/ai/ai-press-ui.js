@@ -43,8 +43,8 @@
    * ------------------------------------------------------------------ */
   var CSS = [
     '.aip-wrap{display:flex;flex-direction:column;gap:12px}',
+    '.aip-wrap .card>h3 .sub{font-size:11.5px;font-weight:400;opacity:.72;letter-spacing:0}',
     '.aip-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}',
-    '.aip-head h3{margin:0;font-size:17px}',
     '.aip-plat{font-size:11.5px;padding:2px 8px;border-radius:20px;border:1px solid var(--line2);color:var(--dim)}',
     '.aip-mood{font-size:11.5px;color:var(--dim);margin-left:auto}',
     '.aip-moodbar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin-top:8px}',
@@ -52,7 +52,6 @@
 
     /* ---- 媒体：工具条 + 单家版面 ---- */
     '.aip-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
-    '.aip-bar h3{margin:0;font-size:16px}',
     '.aip-bar select{min-width:170px;padding:4px 8px;border-radius:6px;border:1px solid var(--line2);',
     '  background:var(--panel3);color:var(--text);font-family:var(--font);font-size:12.5px}',
     '.aip-bar .aip-tiny{margin-left:auto}',
@@ -164,9 +163,11 @@
       moodTxt = '样本倾向：支持 ' + Math.round(mood.support / tot * 100) + '% · 反对 ' +
         Math.round(mood.oppose / tot * 100) + '% · 中立 ' + Math.round(mood.neutral / tot * 100) + '%';
     }
-    return '<div class="card"><div class="aip-head">' +
-      '<h3>舆论场</h3>' +
-      '<span class="aip-plat">' + esc(plat.cn) + '</span>' +
+    /* 标题必须是 .card 的直接子元素：rc 皮肤会把 .card 的首个 h3 做成绝对定位的标题条，
+       嵌在别的 div 里就会被盖住一半 */
+    return '<div class="card">' +
+      '<h3>舆论场 <span class="sub">' + esc(plat.cn) + '</span></h3>' +
+      '<div class="aip-head">' +
       '<span class="aip-plat">' + esc(dateCN) + (p ? ' · 更新于 ' + esc(p.week) : ' · 尚无快照') + '</span>' +
       (src ? '<span class="aip-plat">' + esc(src) + '</span>' : '') +
       '<span class="aip-mood">' + esc(moodTxt) + '</span>' +
@@ -212,14 +213,13 @@
     }).join('');
     var doneN = 0;
     names.forEach(function (n) { if (p.outlets && p.outlets[n]) doneN++; });
-    return '<div class="aip-bar">' +
-      '<h3>媒体</h3>' +
+    return '<h3>媒体 <span class="sub">已生成 ' + doneN + ' / ' + names.length + ' 家</span></h3>' +
+      '<div class="aip-bar">' +
       '<select onchange="AIPRESS_UI.selectOutlet(this.value)"' + (busy() ? ' disabled' : '') + '>' + opts + '</select>' +
       '<button class="btn sm" onclick="AIPRESS.refreshOutlet(AIPRESS.ensure().selected,true)"' +
       (busy() ? ' disabled' : '') + '>刷新本家</button>' +
       '<button class="btn sm" onclick="AIPRESS.refreshAllOutlets(true)"' +
       (busy() ? ' disabled' : '') + '>生成全部</button>' +
-      '<span class="aip-tiny">已生成 ' + doneN + ' / ' + names.length + ' 家</span>' +
       '</div>';
   }
 
@@ -277,7 +277,7 @@
     if (!names.length) return '';
     var sel = p.selected || names[0];
     var o = p.outlets && p.outlets[sel];
-    return '<div class="card" style="padding:14px 16px">' +
+    return '<div class="card">' +
       barHTML(p) +
       '<div style="margin-top:12px">' + (o ? paperHTML(o) : missingHTML(sel)) + '</div>' +
       '</div>';
@@ -341,8 +341,9 @@
     var sub = plat.id === 'forum' ? 'AMERICA ONLINE' :
               plat.id === 'facebook' ? '动态消息' :
               plat.id === 'twitter' ? '时间线' : '为你推荐';
-    return '<div class="card" style="padding:0;overflow:hidden">' +
-      '<div class="aip-feed ' + plat.id + '">' +
+    return '<div class="card">' +
+      '<h3>民间 <span class="sub">' + esc(plat.cn) + (p.week ? ' · ' + esc(p.week) : '') + '</span></h3>' +
+      '<div class="aip-feed ' + plat.id + '" style="border-radius:8px;overflow:hidden">' +
       '<div class="fbar">' + esc(title) + ' <small>' + esc(sub) + '</small>' +
       '<small style="margin-left:auto">' + esc(p.week || '') + '</small></div>' +
       (posts.length ? posts.map(function (x, i) { return postHTML(x, plat, i); }).join('')

@@ -86,6 +86,13 @@
     '.ai-note{font-size:11.5px;color:var(--dim2);margin-top:6px;line-height:1.6}',
     '.ai-follow{font-size:12.5px;color:var(--dim);margin-top:6px;font-style:italic}',
     '.ai-src{font-size:10.5px;color:var(--dim2);font-weight:400;margin-left:6px}',
+    '.ai-grade{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:20px;',
+    '  margin-right:6px;border:1px solid var(--line2);background:var(--panel3);color:var(--dim);vertical-align:1px}',
+    '.ai-grade.g0{color:#c0393b;border-color:#c0393b66}',
+    '.ai-grade.g1{color:#d97b2b;border-color:#d97b2b66}',
+    '.ai-grade.g2{color:#d99b2b;border-color:#d99b2b66}',
+    '.ai-grade.g3{color:#3fa66a;border-color:#3fa66a66}',
+    '.ai-grade.g4{color:#1f9fd9;border-color:#1f9fd966}',
     '.ai-busy{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12.5px;color:var(--dim)}',
     '.ai-spin{width:13px;height:13px;border:2px solid var(--line2);border-top-color:var(--accent);',
     '  border-radius:50%;animation:aipin .9s linear infinite;display:inline-block}',
@@ -161,7 +168,9 @@
     var r = UI_STATE.result;
     if (!r) return '';
     var cls = r.ok ? '' : ' bad';
-    var head = (r.ok ? '【' + esc(r.headline) + '】' : '✕ 指令未执行');
+    var gcls = 'g' + (r.grade == null ? 3 : Math.max(0, Math.min(4, r.grade)));
+    var grade = r.gradeCN ? '<span class="ai-grade ' + gcls + '">' + esc(r.gradeCN) + '</span>' : '';
+    var head = r.ok ? (grade + '【' + esc(r.headline) + '】') : (grade || '✕ 指令未执行');
     var src = (r.source === 'offline' ? '本地规则' : 'AI');
     var meta = src + ' · ' + (cfg().model || '') +
       (r.apCost ? ' · ' + r.apCost + ' 行动点' : '') +
@@ -669,7 +678,8 @@
 
       '<div class="ai-row" style="margin-top:14px">' +
       '<button class="btn primary sm" onclick="AIUI.test()"' + (busy() ? ' disabled' : '') + '>测试连接</button>' +
-      '<span class="ai-tiny">会向接口发一条极小的请求，只验证地址、密钥与返回格式是否通。</span></div>' +
+      '<button class="btn sm" onclick="AIUI.useProxy()" title="把接口地址切到 http://127.0.0.1:8787/v1（先运行 node ai/proxy.js）">改用本地代理</button>' +
+      '<span class="ai-tiny">会向接口发一条极小的请求，只验证地址、密钥与返回格式是否通。浏览器直连被 CORS 挡时，用本地代理。</span></div>' +
       testHTML() +
       '</div>';
   }
@@ -716,7 +726,10 @@
       '<div class="ai-tiny">' + c.strict + '　0.6 = 保守（效果更小、更稳）；1.5 = 宽松（更容易出大新闻）</div>' +
 
       '<div class="ai-check"><input type="checkbox" id="ai-cv"' + (c.variance ? ' checked' : '') +
-      ' onchange="AIUI.setCfg({variance:this.checked})"><label for="ai-cv" style="margin:0">随机扰动与难度判定（推荐开启：同一句话不会每次都得到同样结果）</label></div>' +
+      ' onchange="AIUI.setCfg({variance:this.checked})"><label for="ai-cv" style="margin:0">数值随机扰动（±22%：同一句话的力度不会每次都一模一样；成败只由 AI 档位决定）</label></div>' +
+
+      '<div class="ai-check"><input type="checkbox" id="ai-gm"' + (c.godMode ? ' checked' : '') +
+      ' onchange="AIUI.setCfg({godMode:this.checked})"><label for="ai-gm" style="margin:0">上帝模式：行动不会失败或被阻碍（只改提示词；行动点照常消耗、数值上限照旧）</label></div>' +
 
       '<div class="ai-check"><input type="checkbox" id="ai-of"' + (c.offlineFallback ? ' checked' : '') +
       ' onchange="AIUI.setCfg({offlineFallback:this.checked})"><label for="ai-of" style="margin:0">接口不可用时用本地规则裁决（离线也能玩，但效果较粗）</label></div>' +
@@ -949,6 +962,18 @@
     /* 换服务商后顺手拉一次模型列表（有 Key 才拉） */
     if (cfg().apiKey && !cachedModels()) fetchModels(false);
   }
+  /* 一键切到本地代理：浏览器直连被 CORS 挡下时的标准出路 */
+  function useProxy() {
+    var port = 8787;
+    var patch = { provider: 'openai', baseUrl: 'http://127.0.0.1:' + port + '/v1' };
+    if (!cfg().model) patch.model = 'deepseek-chat';
+    global.AI.set(patch);
+    UI_STATE.test = null;
+    UI_STATE.modelsErr = '';
+    UI_STATE.modelsTried = false;
+    toast('已切到本地代理：先运行 node ai/proxy.js，上游地址与 key 写在 ai/proxy.config.json。');
+    if (typeof render === 'function') render();
+  }
   function open() {
     UI_STATE.tab = 'api';
     UI.modal = { type: 'aiset' };
@@ -1076,7 +1101,7 @@
     historyHTML: historyHTML,
     modalFor: modalFor,
     setDraft: setDraft, setTab: setTab, setPromptMode: setPromptMode,
-    setPrompt: setPrompt, setCfg: setCfg, usePreset: usePreset,
+    setPrompt: setPrompt, setCfg: setCfg, usePreset: usePreset, useProxy: useProxy,
     open: open, close: close, openHistory: openHistory,
     clearHistory: clearHistory, resetAll: resetAll, preview: preview, test: test,
     fetchModels: fetchModels, setModelByIdx: setModelByIdx,

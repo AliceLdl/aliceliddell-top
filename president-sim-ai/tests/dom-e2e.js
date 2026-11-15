@@ -158,9 +158,9 @@ async function waitFor(fn, timeoutMs, stepMs) {
   W.AICLIENT.chat = function () {
     return Promise.resolve({
       text: JSON.stringify({
-        ok: true, headline: '白宫强推药价上限',
+        success: 'success', headline: '白宫强推药价上限',
         narrative: '你在椭圆形办公室发表全国电视讲话，宣布以行政令方式对联邦医保覆盖的处方药设定价格上限。制药行业当晚发表声明称将起诉。',
-        apCost: 1, difficulty: 0.2, risk: 'medium', tone: '强硬',
+        apCost: 1, risk: 'medium', tone: '强硬',
         effects: { approval: 1.4, tension: 0, division: 0.5,
                    relations: { CN: 0 }, sectors: { pharma: -7 } },
         bill: { title: '处方药价格上限法案', topic: '医疗', direction: -4, summary: '对联邦医保药品设价格上限' },
@@ -194,6 +194,8 @@ async function waitFor(fn, timeoutMs, stepMs) {
     'drafts=' + (G.drafts || []).length);
   ok('叙事进了新闻日志', G.log.length > logLen, '新增 ' + (G.log.length - logLen) + ' 条');
   ok('结果卡片渲染出来', appHTML().indexOf('白宫强推药价上限') >= 0);
+  ok('结果卡片显示执行档位', /ai-grade g3/.test(appHTML()) && appHTML().indexOf('>成功<') >= 0,
+    '档位标记=' + ((appHTML().match(/ai-grade g\d/g) || []).join(',')));
 
   /* 3b. 叙事账本 */
   console.log('\n[3b] 叙事账本（玩家可见简报 / 隐藏内部档案）');
@@ -222,9 +224,9 @@ async function waitFor(fn, timeoutMs, stepMs) {
   W.AICLIENT.chat = function () {
     return Promise.resolve({
       text: JSON.stringify({
-        ok: true, headline: '联邦接管灾区救援',
+        success: 'success', headline: '联邦接管灾区救援',
         narrative: '你当天下午飞抵灾区，宣布联邦应急管理局全面接管现场协调，并要求国会在四十八小时内通过追加拨款。州长公开致谢，反对党质疑你在作秀。',
-        apCost: 1, difficulty: 0.3, risk: 'low', tone: '强硬',
+        apCost: 1, risk: 'low', tone: '强硬',
         effects: { approval: 1.1, confidence: 2, division: -0.5 }, followup: '拨款案还卡在众议院。'
       }),
       usage: { input: 1200, output: 240 }, ms: 10, totalMs: 10, model: 'stub', endpoint: 'stub', attempts: 1
@@ -277,6 +279,20 @@ async function waitFor(fn, timeoutMs, stepMs) {
   W.AIUI.setTab('prompt');
   await wait(60);
   ok('提示词页可编辑', appHTML().indexOf('textarea') >= 0 && appHTML().indexOf('系统提示词') >= 0);
+  W.AIUI.setTab('play');
+  await wait(60);
+  const hasGod = appHTML().indexOf('AIUI.setCfg({godMode:this.checked})') >= 0;
+  const promptBefore = W.AIPROMPT.system().length;
+  W.AIUI.setCfg({ godMode: true });
+  const godPrompt = W.AIPROMPT.system();
+  ok('玩法页有上帝模式开关', hasGod, hasGod ? '复选框已渲染' : '缺少 godMode 复选框');
+  ok('开上帝模式后提示词加长并写入档位约束',
+    godPrompt.length > promptBefore && /上帝模式/.test(godPrompt) && /"triumph"/.test(godPrompt),
+    promptBefore + ' → ' + godPrompt.length + ' 字');
+  ok('上帝模式不碰扣点逻辑', W.AIADJ.apply.toString().indexOf('godMode') < 0,
+    'apply 源码里无 godMode 分支');
+  W.AIUI.setCfg({ godMode: false });
+  await wait(60);
   W.AIUI.openHistory();
   await wait(60);
   ok('裁决档案列出刚才的记录', /白宫强推药价上限|联邦接管灾区救援|制裁/.test(appHTML()));
@@ -289,9 +305,9 @@ async function waitFor(fn, timeoutMs, stepMs) {
   W.AICLIENT.chat = function () {
     return Promise.resolve({
       text: JSON.stringify({
-        ok: true, headline: '财政与联储联合救市',
+        success: 'success', headline: '财政与联储联合救市',
         narrative: '你要求财政部与联储在周末连夜敲定商业票据融资便利，并向国会提交资产购买授权。市场周一开盘止跌，但两党都要求你到会说明资金去向。',
-        apCost: 2, difficulty: 0.4, risk: 'high', tone: '强硬',
+        apCost: 2, risk: 'high', tone: '强硬',
         effects: { confidence: 4, stock: 2, deficit: 0.2, tension: 0 }, followup: '救助资金需要国会审计。'
       }),
       usage: { input: 1200, output: 250 }, ms: 10, totalMs: 10, model: 'stub', endpoint: 'stub', attempts: 1
@@ -324,9 +340,9 @@ async function waitFor(fn, timeoutMs, stepMs) {
     W.AICLIENT.chat = function () {
       return Promise.resolve({
         text: JSON.stringify({
-          ok: true, headline: '先谈后压',
+          success: 'success', headline: '先谈后压',
           narrative: '你先与盟友协调，公开提出停火方案，同时把航母战斗群前移。对方称愿意接触，但要求先解除部分制裁。',
-          apCost: 2, difficulty: 0.6, risk: 'high', tone: '妥协',
+          apCost: 2, risk: 'high', tone: '妥协',
           effects: { tension: 3, approval: 0.4, division: 0.3 }, followup: '国会要求你对军事部署作出说明。'
         }),
         usage: { input: 1200, output: 240 }, ms: 10, totalMs: 10, model: 'stub', endpoint: 'stub', attempts: 1
@@ -394,9 +410,9 @@ async function waitFor(fn, timeoutMs, stepMs) {
       try { captured = { url: req.url, headers: req.headers, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) }; }
       catch (e) { captured = { url: req.url, headers: req.headers, body: null, err: e.message }; }
       const verdict = {
-        ok: true, headline: '联储换帅风波',
+        success: 'success', headline: '联储换帅风波',
         narrative: '你提名一位偏鸽派的经济学家进入联储理事会，市场当天小幅走高。反对党指责你试图政治化货币政策，参议院银行委员会要求听证。',
-        apCost: 1, difficulty: 0.45, risk: 'medium', tone: '程序性',
+        apCost: 1, risk: 'medium', tone: '程序性',
         effects: { approval: 0.6, confidence: 1.5, stock: 1.2, tension: 0 },
         followup: '听证会将成为下一场舆论战。'
       };
@@ -609,6 +625,17 @@ async function waitFor(fn, timeoutMs, stepMs) {
     ['头条', '国内', '经济', '国际', '总统政策观察', '社论'].every(x => appHTML().indexOf('>' + x + '<') >= 0),
     '');
   ok('有媒体下拉栏', /<select[^>]*onchange="AIPRESS_UI\.selectOutlet/.test(appHTML()), '');
+  const pressCards = [...W.document.querySelectorAll('#app .aip-wrap > .card')];
+  ok('有标题的舆论卡片把 h3 放在直接首子（rc 皮肤标题条不会盖住内容）',
+    pressCards.length >= 2 && pressCards.every(c => {
+      const h3 = c.querySelector('h3');
+      return !h3 || c.firstElementChild === h3;
+    }),
+    '卡片数=' + pressCards.length + ' / ' +
+    pressCards.map(c => (c.querySelector('h3') ? c.firstElementChild.tagName + '>' + c.querySelector('h3').textContent.trim().slice(0, 4) : '无标题')).join(' , '));
+  ok('带标题的卡片没有内联 padding（不与 rc 的 34px 标题区打架）',
+    pressCards.every(c => !c.querySelector('h3') || !/padding/.test(c.getAttribute('style') || '')),
+    pressCards.map(c => c.getAttribute('style') || '—').join(' | '));
   ok('民间区用论坛皮肤（2001）', appHTML().indexOf('aip-feed forum') >= 0, '');
   ok('发言与互动数渲染', appHTML().indexOf('油价又涨了') >= 0 &&
     appHTML().indexOf('查看') >= 0, '');
@@ -656,9 +683,9 @@ async function waitFor(fn, timeoutMs, stepMs) {
   W.AICLIENT.chat = function () {
     return Promise.resolve({
       text: JSON.stringify({
-        ok: true, headline: '铁锈带三日行',
+        success: 'success', headline: '铁锈带三日行',
         narrative: '你在宾夕法尼亚连跑三场工会集会，顺带投放了一轮针对制造业的电视广告。当地工会主席站台，对手阵营指责你在贸易问题上前后不一。',
-        apCost: 1, difficulty: 0.35, risk: 'low', tone: '交易',
+        apCost: 1, risk: 'low', tone: '交易',
         campaign: { momentum: 0.12, funds: -12, energy: -9,
                     stats: { nameRec: 1.1, enthusiasm: 0.9, adSpend: 12 },
                     visits: { PA: 2.2 }, stateLift: { PA: 1.2 } },
