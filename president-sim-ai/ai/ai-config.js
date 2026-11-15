@@ -21,7 +21,8 @@
     enabled: true,                 /* 关闭后行动台会退回原版按钮 */
     provider: 'openai',            /* openai | anthropic | gemini | custom */
     baseUrl: 'https://api.deepseek.com/v1',
-    model: 'deepseek-chat',
+    /* 不预置模型：必须「拉取列表」后选一个，避免写死过时的模型名 */
+    model: '',
     apiKey: '',
     temperature: 0.75,
     maxTokens: 1200,
@@ -66,49 +67,32 @@
   };
 
   /* ------------------------------------------------------------------ *
-   * 服务商预设（地址 + 默认模型 + 备注）
+   * 服务商预设（只填接口地址，不预置任何模型）
    * 说明：只要对方兼容 OpenAI 的 /chat/completions，都可以直接用 openai 协议。
+   * 模型一律靠「拉取列表」从接口实时获取，避免预设里写死过时的模型名。
    * ------------------------------------------------------------------ */
   var PROVIDERS = [
     { id: 'openai',    cn: 'OpenAI 兼容（通用）', baseUrl: 'https://api.openai.com/v1',
-      model: 'gpt-4o-mini', fallback: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'o3-mini', 'o1-mini'],
       note: '任何兼容 /chat/completions 的服务都能用：DeepSeek、Kimi、智谱、Qwen、SiliconFlow、OpenRouter、OneAPI…' },
     { id: 'deepseek',  cn: 'DeepSeek 官方', baseUrl: 'https://api.deepseek.com/v1',
-      model: 'deepseek-chat', fallback: ['deepseek-chat', 'deepseek-reasoner'],
       note: '性价比高，中文政治叙事表现好，支持 JSON 输出。' },
     { id: 'moonshot',  cn: 'Moonshot / Kimi', baseUrl: 'https://api.moonshot.cn/v1',
-      model: 'moonshot-v1-8k', fallback: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
-      note: '8k 上下文够用；长上下文模型可换成 moonshot-v1-32k。' },
+      note: '8k 上下文够用；长上下文模型拉取后可自己挑。' },
     { id: 'zhipu',     cn: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-      model: 'glm-4-flash', fallback: ['glm-4-flash', 'glm-4-air', 'glm-4-plus', 'glm-4-long'],
-      note: 'glm-4-flash 免费额度大，适合反复试玩。' },
+      note: '免费额度较大，适合反复试玩。' },
     { id: 'qwen',      cn: '阿里通义 Qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-      model: 'qwen-plus', fallback: ['qwen-plus', 'qwen-turbo', 'qwen-max', 'qwen-long'],
       note: 'DashScope 的 OpenAI 兼容模式。' },
     { id: 'silicon',   cn: 'SiliconFlow 硅基流动', baseUrl: 'https://api.siliconflow.cn/v1',
-      model: 'deepseek-ai/DeepSeek-V3',
-      fallback: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct', 'THUDM/glm-4-9b-chat'],
       note: '国内直连，聚合多家模型。' },
     { id: 'openrouter',cn: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1',
-      model: 'anthropic/claude-3.5-sonnet',
-      fallback: ['anthropic/claude-3.5-sonnet', 'openai/gpt-4o', 'google/gemini-2.0-flash-001', 'deepseek/deepseek-chat'],
       note: '一个 key 调多家模型，需要能访问外网。' },
-    { id: 'opencode',  cn: 'OpenCode / DSH 网关', baseUrl: 'https://opencode.ai/inference/go/v1',
-      model: 'deepseek-v4.1-flash',
-      fallback: ['deepseek-v4.1-flash', 'deepseek-chat', 'deepseek-reasoner'],
-      note: 'OpenAI 兼容协议。浏览器直连会被 CORS 挡下（对方不回 Access-Control-Allow-Origin），' +
-            '点下面的「改用本地代理」按钮，用 node ai/proxy.js 转发即可。' },
     { id: 'anthropic', cn: 'Anthropic Claude', baseUrl: 'https://api.anthropic.com',
-      model: 'claude-sonnet-4-20250514',
-      fallback: ['claude-sonnet-4-20250514', 'claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest'],
       note: '走 /v1/messages 协议，浏览器直连已自动加 CORS 头。' },
     { id: 'gemini',    cn: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-      model: 'gemini-2.0-flash', fallback: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
       note: '走 generateContent，key 用 ?key= 传递。' },
     { id: 'proxy',     cn: '本地代理（推荐用于 CORS 受限时）', baseUrl: 'http://127.0.0.1:8787/v1',
-      model: 'deepseek-chat', fallback: ['deepseek-chat', 'deepseek-reasoner'],
       note: '先运行 node ai/proxy.js，再把上游地址与 key 写进代理配置。' },
-    { id: 'custom',    cn: '自定义（手工填地址）', baseUrl: '', model: '', fallback: [],
+    { id: 'custom',    cn: '自定义（手工填地址）', baseUrl: '',
       note: '自己填完整 base URL；协议仍按上面选的 openai / anthropic / gemini 处理。' }
   ];
 

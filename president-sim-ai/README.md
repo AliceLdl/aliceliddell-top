@@ -461,6 +461,10 @@ president-sim-ai/
 │   ├── ai-selftest.js         # 页内自检（?selftest=1，19 项）
 │   ├── proxy.js               # 可选的本地代理（零依赖，支持 apiKeyEnv / authStyle / GET 透传）
 │   └── proxy.config.example.json
+├── fonts/
+│   ├── fusion-pixel-12px-sc.woff2   # 补字用的开源像素字体（Fusion Pixel 12px SC，OFL，31345 字形）
+│   ├── FusionPixel-LICENSE.txt      # SIL OFL 1.1 全文
+│   └── README.md                    # 字体栈说明、缺字统计、换完整版丁卯点阵体的方法
 ├── tests/
 │   ├── node-harness.js        # 62 项：假引擎下的模块级集成测试
 │   ├── contract.js            # 约 50 项：与原版引擎的符号/字段契约核对
@@ -469,7 +473,31 @@ president-sim-ai/
 └── README.md
 ```
 
-`tests/` 与 `.testdeps/` 只用于开发验证，部署时可以整个删掉。
+`tests/` 与 `.testdeps/` 只用于开发验证，部署时可以整个删掉；`fonts/` 必须跟着 `index.html` 一起部署。
+
+---
+
+## 「重度依赖」主题的字体与缺字兜底
+
+raincandy 主题原本只用**丁卯点阵体（Dinkie Bitmap）**。官方只发布 7px / 9px 试用版（内含 2501 个汉字），
+本作内嵌的 12px 子集共 2660 个字形，而游戏实际用到 2665 个字符——差 95 个
+（46 个汉字如「俗 俱 價 僻 卯 叹 吻 唱 囊 宏 寓 寿 岭 怪」，以及一批符号），这些字在主题下会显示成空白。
+
+现在改成「主字体 + 补字像素体 + 系统字体」三级栈：
+
+```css
+--rc-font:"DinkieBitmap","FusionPixel12","Zpix","MS Gothic",
+          "Microsoft YaHei","PingFang SC","Hiragino Sans GB",
+          "Segoe UI Symbol","Noto Sans Symbols 2","Segoe UI Emoji","Noto Color Emoji",
+          ui-monospace,monospace;
+```
+
+- `FusionPixel12` = 缝合像素字体 12px Proportional SC（SIL OFL，31345 字形），与丁卯同为 12px 像素网格，
+  浏览器逐字回退后视觉基本一致；68 个缺字（含全部 46 个汉字）由它补上；
+- 剩下 27 个数学符号与 emoji（∓ √ ≈ ⏱ ♻ ⚖ ⚠ ✓ ✔ ✕ ✗ 🌀 🌹 🏛 👍 💬 📊 🔁 🔥 …）交给系统符号/emoji 字体；
+- 用 fontTools 逐字比对 cmap：整条栈之后**缺字 0 个**。
+
+细节与「拿到完整版丁卯点阵体后怎么替换」见 [fonts/README](fonts/README.md)。
 
 ---
 
@@ -535,8 +563,8 @@ node tests/dom-e2e.js
 ## 版本
 
 - 原版引擎：`v0.2.2`（`aliceliddell-top-site/president-sim/index.html`，未改动）
-- AI 扩展层：`v0.3.6`（成败改由 AI 的 `success` 五档决定、上帝模式、OpenCode 预设与本地代理增强、
-  舆论卡片标题结构修正）
+- AI 扩展层：`v0.3.7`（raincandy 像素主题补齐缺字：挂 FusionPixel12 兜底字体；成败改由 AI 的 `success` 五档决定、
+  上帝模式、本地代理增强、舆论卡片标题结构修正）
 - 需要浏览器支持 `fetch` / `Promise` / `AbortController`（Chrome / Edge 近五年版本均可）
 
 > **改版本号要同时改三处**：`index.html` 的 `<title>`、脚本里的 `const APP_VERSION`（顶栏与开局页页脚显示的就是它）、

@@ -113,6 +113,19 @@ async function waitFor(fn, timeoutMs, stepMs) {
   }, 30000);
   const appLen = () => (W.document.getElementById('app') ? W.document.getElementById('app').innerHTML.length : 0);
   ok('扩展层已挂载并渲染开局页', booted, 'app HTML ' + appLen() + ' 字符');
+
+  /* 0b. raincandy 像素主题的字体链（缺字兜底） */
+  const hasRcVar = /--rc-font:[^;]*"DinkieBitmap"[^;]*"FusionPixel12"/.test(html);
+  const hasFace = /font-family:"FusionPixel12"/.test(html);
+  const fontFile = path.join(ROOT, 'fonts', 'fusion-pixel-12px-sc.woff2');
+  const fontBytes = fs.existsSync(fontFile) ? fs.statSync(fontFile).size : 0;
+  ok('raincandy 字体栈：Dinkie 在前、FusionPixel12 兜底', hasRcVar && hasFace,
+    '变量=' + hasRcVar + ' / @font-face=' + hasFace);
+  ok('补字字体文件在位', fontBytes > 400000,
+    fontFile.replace(ROOT, '.') + ' = ' + Math.round(fontBytes / 1024) + ' KB');
+  ok('所有 raincandy 字体声明都走统一变量',
+    (html.match(/font-family:"DinkieBitmap"/g) || []).length === 1,
+    '残留硬编码 ' + ((html.match(/font-family:"DinkieBitmap"/g) || []).length - 1) + ' 处');
   REAL_CHAT = W.AICLIENT ? W.AICLIENT.chat : null;
 
   /* 1. 页内自检 */
