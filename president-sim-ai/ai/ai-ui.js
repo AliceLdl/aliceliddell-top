@@ -216,8 +216,7 @@
       '<button class="btn sm" style="margin-left:8px" onclick="AIUI.openBrief()">查看</button>' +
       '</span></div>';
     var body = empty
-      ? '<div class="ai-brief-sum">每次裁决后，AI 会把「谁下了什么命令、谁在等答复、哪颗雷还没爆」记进这里，' +
-        '并把事件的影响一直带在上下文里。</div>'
+      ? ''
       : (s.brief.summary ? '<div class="ai-brief-sum">' + esc(s.brief.summary) + '</div>' : '') +
         (s.brief.risks && s.brief.risks.length
           ? '<div class="ai-brief-line">风险提示：' + esc(s.brief.risks.slice(-2).map(function (r) { return r.t; }).join('；')) + '</div>'

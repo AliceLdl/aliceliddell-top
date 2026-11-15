@@ -563,8 +563,8 @@ node tests/dom-e2e.js
 ## 版本
 
 - 原版引擎：`v0.2.2`（`aliceliddell-top-site/president-sim/index.html`，未改动）
-- AI 扩展层：`v0.3.7`（raincandy 像素主题补齐缺字：挂 FusionPixel12 兜底字体；成败改由 AI 的 `success` 五档决定、
-  上帝模式、本地代理增强、舆论卡片标题结构修正）
+- AI 扩展层：`v0.3.8`（删掉态势简报空态的说明句；raincandy 像素主题补齐缺字：挂 FusionPixel12 兜底字体；
+  成败改由 AI 的 `success` 五档决定、上帝模式、本地代理增强、舆论卡片标题结构修正）
 - 需要浏览器支持 `fetch` / `Promise` / `AbortController`（Chrome / Edge 近五年版本均可）
 
 > **改版本号要同时改三处**：`index.html` 的 `<title>`、脚本里的 `const APP_VERSION`（顶栏与开局页页脚显示的就是它）、
