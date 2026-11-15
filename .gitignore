@@ -1,4 +1,4 @@
-﻿# 系统/编辑器
+# 系统/编辑器
 .DS_Store
 Thumbs.db
 desktop.ini
@@ -17,3 +17,9 @@ dist/
 .env
 .env.*
 secrets.*
+
+# 总统模拟器 AI 版的本地代理配置与测试依赖
+president-sim-ai/.testdeps/
+president-sim-ai/ai/proxy.config.json
+president-sim-ai/.edgeprof/
+
