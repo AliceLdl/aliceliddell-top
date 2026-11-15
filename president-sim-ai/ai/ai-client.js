@@ -53,6 +53,141 @@
     return joinUrl(c.baseUrl || 'https://api.openai.com/v1', '/chat/completions');
   }
 
+  /* ------------------------------------------------------------------ *
+   * 模型列表：自动拉取
+   *   OpenAI 兼容：GET {base}/models        → {data:[{id…}]}
+   *   Anthropic  ：GET {base}/v1/models     → {data:[{id, display_name…}]}
+   *   Gemini     ：GET {base}/models?key=…  → {models:[{name:'models/…',supportedGenerationMethods}]}
+   * ------------------------------------------------------------------ */
+  function modelsEndpoint() {
+    var c = cfg();
+    var prov = c.provider || 'openai';
+    var base = String(c.baseUrl || '').trim().replace(/\/+$/, '');
+    base = base.replace(/\/chat\/completions$/, '').replace(/\/messages$/, '');
+    if (prov === 'gemini') {
+      base = base.replace(/\/models\/[^/]*(:generateContent)?$/, '');
+      return base + '/models?key=' + encodeURIComponent(c.apiKey || '') + '&pageSize=200';
+    }
+    if (prov === 'anthropic') {
+      return (/\/v1$/.test(base) ? base : base + '/v1') + '/models?limit=200';
+    }
+    return base + '/models';
+  }
+
+  /* 把各家返回的形状统一成 [{id, name}]，并按「像聊天模型的排前面」排序 */
+  function parseModels(json, prov) {
+    var seen = {}, list = [];
+    function add(id, name) {
+      id = String(id == null ? '' : id).trim().replace(/^models\//, '');
+      if (!id || seen[id]) return;
+      seen[id] = 1;
+      list.push({ id: id, name: String(name || id) });
+    }
+    if (!json) return list;
+
+    if (prov === 'gemini' && Array.isArray(json.models)) {
+      json.models.forEach(function (m) {
+        if (!m) return;
+        var methods = m.supportedGenerationMethods;
+        if (Array.isArray(methods) && methods.length &&
+            methods.indexOf('generateContent') < 0) return;
+        add(m.name || m.id, m.displayName || m.name);
+      });
+    } else if (Array.isArray(json.data)) {
+      json.data.forEach(function (m) {
+        if (typeof m === 'string') add(m, m);
+        else if (m) add(m.id || m.name || m.model, m.display_name || m.displayName || m.id || m.name);
+      });
+    } else if (Array.isArray(json.models)) {
+      json.models.forEach(function (m) {
+        if (typeof m === 'string') add(m, m);
+        else if (m) add(m.id || m.name || m.model, m.display_name || m.displayName || m.id || m.name);
+      });
+    } else if (Array.isArray(json)) {
+      json.forEach(function (m) {
+        if (typeof m === 'string') add(m, m);
+        else if (m) add(m.id || m.name, m.display_name || m.displayName || m.id || m.name);
+      });
+    }
+
+    function score(id) {
+      var s = 0;
+      if (/embed|whisper|tts|dall|moderation|rerank|image|audio|transcribe|speech|vision-preview/i.test(id)) s -= 10;
+      if (/chat|instruct|gpt-4|gpt-3\.5|o1|o3|claude|deepseek|qwen|glm|moonshot|gemini|llama|mistral|grok|kimi/i.test(id)) s += 5;
+      return s;
+    }
+    list.sort(function (a, b) {
+      var d = score(b.id) - score(a.id);
+      return d !== 0 ? d : a.id.localeCompare(b.id);
+    });
+    return list;
+  }
+
+  function models() {
+    var c = cfg();
+    if (!c.baseUrl) return Promise.reject(new Error('还没有填写接口地址。'));
+    if (!c.apiKey && !/127\.0\.0\.1|localhost/.test(String(c.baseUrl))) {
+      return Promise.reject(new Error('还没有填写 API Key。'));
+    }
+    if (typeof fetch !== 'function') {
+      return Promise.reject(new Error('当前浏览器不支持 fetch。'));
+    }
+    var prov = c.provider || 'openai';
+    var url = modelsEndpoint();
+    var headers = {};
+    if (prov === 'anthropic') {
+      headers['x-api-key'] = c.apiKey || '';
+      headers['anthropic-version'] = '2023-06-01';
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    } else if (prov !== 'gemini') {
+      headers['Authorization'] = 'Bearer ' + (c.apiKey || '');
+      if (prov === 'custom') {
+        var extra = parseCustomHeaders();
+        for (var k in extra) headers[k] = extra[k];
+      }
+    }
+
+    var started = Date.now();
+    var ctrl = null;
+    try { ctrl = new AbortController(); } catch (e) { ctrl = null; }
+    var timer = setTimeout(function () {
+      if (ctrl) { try { ctrl.abort(); } catch (e) {} }
+    }, 25000);
+    var init = { method: 'GET', headers: headers };
+    if (ctrl) init.signal = ctrl.signal;
+
+    return fetch(url, init).then(function (resp) {
+      return resp.text().then(function (raw) {
+        clearTimeout(timer);
+        var ms = Date.now() - started;
+        if (global.AICFG && AICFG.verbose && global.console) {
+          console.log('[AI] models ' + resp.status + ' ' + ms + 'ms', raw.slice(0, 800));
+        }
+        if (!resp.ok) throw new Error(errorText(resp.status, raw));
+        var json = null;
+        try { json = JSON.parse(raw); } catch (e) {
+          throw new Error('模型列表不是 JSON（可能是代理错误页）：' + raw.slice(0, 160));
+        }
+        if (json && json.error) {
+          throw new Error('服务端报错：' + (json.error.message || JSON.stringify(json.error)).slice(0, 240));
+        }
+        var list = parseModels(json, prov);
+        if (!list.length) throw new Error('接口没有返回任何可用模型。');
+        return {
+          models: list, ms: ms, at: global.AI.nowText(),
+          endpoint: url.replace(/key=[^&]+/, 'key=***')
+        };
+      });
+    }).catch(function (e) {
+      clearTimeout(timer);
+      if (e && e.name === 'AbortError') throw new Error('拉取模型列表超时（25 秒）。');
+      if (e && e.message && /Failed to fetch|NetworkError|Load failed/i.test(e.message)) {
+        throw new Error('网络请求失败（该接口可能不允许浏览器直连，可改用 ai/proxy.js）。');
+      }
+      throw e;
+    });
+  }
+
   function parseCustomHeaders() {
     var raw = String(cfg().customHeaders || '').trim();
     if (!raw) return {};
@@ -394,6 +529,9 @@
   global.AICLIENT = {
     chat: chat,
     test: test,
+    models: models,
+    parseModels: parseModels,
+    modelsEndpoint: modelsEndpoint,
     abort: abort,
     extractJson: extractJson,
     endpointFor: endpointFor

@@ -21,6 +21,10 @@
     result: null,          /* 最近一次结算摘要 */
     test: null,            /* 连通性测试结果 */
     preview: null,
+    modelsLoading: false,  /* 正在拉取模型列表 */
+    modelsErr: '',
+    modelsAt: '',
+    modelsTried: false,
     tick: null
   };
 
@@ -28,6 +32,7 @@
   function esc(s) { return global.AI.esc(s); }
   function G() { return global.AIG.g(); }
   function busy() { return !!(global.AI.STAT && AI.STAT.busy); }
+  function toast(msg) { try { if (typeof showToast === 'function') showToast(msg); } catch (e) {} }
 
   /* 没填 Key 且不是本地代理：提示会走离线规则 */
   function keyMissing() {
@@ -524,6 +529,88 @@
       '" onclick="AIUI.setTab(\'' + id + '\')">' + cn + '</button>';
   }
 
+  /* ------------------------------------------------------------------ *
+   * 模型列表：状态 / 候选 / 芯片
+   * ------------------------------------------------------------------ */
+  function cachedModels() {
+    try { return AI.modelList(); } catch (e) { return null; }
+  }
+
+  function modelStatusHTML() {
+    if (UI_STATE.modelsLoading) return '正在向接口拉取模型列表…';
+    if (UI_STATE.modelsErr) return '<span style="color:var(--bad)">' + esc(UI_STATE.modelsErr) + '</span>';
+    var list = cachedModels();
+    if (list && list.models.length) {
+      return '已缓存 ' + list.models.length + ' 个模型 · ' + esc(list.at || '') +
+             '　（点右侧「拉取列表」可刷新）';
+    }
+    var fb = (AI.providerPreset(cfg().provider) || {}).fallback || [];
+    if (fb.length) return '还没有拉取过，先用预设里的 ' + fb.length + ' 个候选（可手输任意模型名）';
+    return '可手输模型名，或点「拉取列表」自动获取';
+  }
+
+  function modelOptionsHTML() {
+    var list = cachedModels();
+    if (!list) return '';
+    return list.models.map(function (id) {
+      return '<option value="' + esc(id) + '"></option>';
+    }).join('');
+  }
+
+  function modelChipsHTML() {
+    var list = cachedModels();
+    if (!list) return '';
+    var cur = cfg().model || '';
+    var max = 10;
+    return '<div class="ai-prov" style="margin-top:8px">' +
+      list.models.slice(0, max).map(function (id, i) {
+        return '<span class="' + (id === cur ? 'on' : '') +
+          '" onclick="AIUI.setModelByIdx(' + i + ')" title="' + esc(id) + '">' + esc(id) + '</span>';
+      }).join('') +
+      (list.models.length > max ? '<span style="opacity:.6;cursor:default">共 ' + list.models.length + ' 个…</span>' : '') +
+      '</div>';
+  }
+
+  function setModelByIdx(i) {
+    var list = cachedModels();
+    if (!list || !list.models[i]) return;
+    AI.set({ model: list.models[i] });
+    if (typeof render === 'function') render();
+  }
+
+  function fetchModels(manual) {
+    if (UI_STATE.modelsLoading) return;
+    if (global.AI.STAT.busy) {
+      if (manual) toast('正在生成内容，稍后再拉取。');
+      return;
+    }
+    var c = cfg();
+    if (!c.baseUrl) {
+      UI_STATE.modelsErr = '先填接口地址，再拉取模型列表。';
+      if (manual) toast(UI_STATE.modelsErr);
+      if (typeof render === 'function') render();
+      return;
+    }
+    UI_STATE.modelsLoading = true;
+    UI_STATE.modelsErr = '';
+    if (typeof render === 'function') render();
+    global.AICLIENT.models().then(function (res) {
+      AI.setModelList(res.models.map(function (x) { return x.id; }), res.at);
+      UI_STATE.modelsLoading = false;
+      UI_STATE.modelsAt = res.at;
+      UI_STATE.modelsTried = true;
+      if (!cfg().model && res.models.length) AI.set({ model: res.models[0].id });
+      if (manual) toast('拉到 ' + res.models.length + ' 个模型。');
+    }).catch(function (e) {
+      UI_STATE.modelsLoading = false;
+      UI_STATE.modelsTried = true;
+      UI_STATE.modelsErr = (e && e.message) ? e.message : String(e);
+      if (manual) toast('拉取失败：' + UI_STATE.modelsErr.slice(0, 60));
+    }).then(function () {
+      if (typeof render === 'function') render();
+    });
+  }
+
   function apiTabHTML() {
     var c = cfg();
     var provs = (AI.PROVIDERS || []).map(function (p) {
@@ -544,9 +631,19 @@
             ({ openai: 'OpenAI 兼容 /chat/completions', anthropic: 'Anthropic /v1/messages',
                gemini: 'Google generateContent', custom: '自定义（同 OpenAI 协议 + 自定义头）' }[p]) + '</option>';
         }).join('') + '</select></div>' +
-        '<div><label>模型</label><input type="text" value="' + esc(c.model) + '" ' +
-        'onchange="AIUI.setCfg({model:this.value.trim()})" placeholder="deepseek-chat"></div>' +
+        '<div><label>模型</label>' +
+          '<div style="display:flex;gap:6px">' +
+            '<input type="text" list="ai-model-list" value="' + esc(c.model) + '" ' +
+            'onchange="AIUI.setCfg({model:this.value.trim()})" placeholder="deepseek-chat" style="flex:1;min-width:0">' +
+            '<button class="btn sm" onclick="AIUI.fetchModels(true)"' +
+            (busy() || UI_STATE.modelsLoading ? ' disabled' : '') + '>' +
+            (UI_STATE.modelsLoading ? '拉取中…' : '拉取列表') + '</button>' +
+          '</div>' +
+          '<div class="ai-tiny" style="margin-top:4px">' + modelStatusHTML() + '</div>' +
+        '</div>' +
       '</div>' +
+      modelChipsHTML() +
+      '<datalist id="ai-model-list">' + modelOptionsHTML() + '</datalist>' +
 
       '<label>接口地址（base URL，不含 /chat/completions）</label>' +
       '<input type="text" value="' + esc(c.baseUrl) + '" onchange="AIUI.setCfg({baseUrl:this.value.trim()})" ' +
@@ -847,12 +944,17 @@
   function usePreset(id) {
     global.AI.usePreset(id);
     UI_STATE.test = null;
+    UI_STATE.modelsErr = '';
     if (typeof render === 'function') render();
+    /* 换服务商后顺手拉一次模型列表（有 Key 才拉） */
+    if (cfg().apiKey && !cachedModels()) fetchModels(false);
   }
   function open() {
     UI_STATE.tab = 'api';
     UI.modal = { type: 'aiset' };
     if (typeof render === 'function') render();
+    /* 第一次打开设置、且还没缓存模型列表时，自动拉一次 */
+    if (cfg().apiKey && !cachedModels() && !UI_STATE.modelsTried) fetchModels(false);
   }
   function close() {
     UI.modal = null;
@@ -906,6 +1008,8 @@
       global.AI.STAT.busy = false;
       global.AI.STAT.busyLabel = '';
       if (typeof render === 'function') render();
+      /* 连接正常就顺手把模型列表拉下来 */
+      if (UI_STATE.test && UI_STATE.test.ok && !cachedModels()) fetchModels(false);
     });
   }
 
@@ -975,6 +1079,7 @@
     setPrompt: setPrompt, setCfg: setCfg, usePreset: usePreset,
     open: open, close: close, openHistory: openHistory,
     clearHistory: clearHistory, resetAll: resetAll, preview: preview, test: test,
+    fetchModels: fetchModels, setModelByIdx: setModelByIdx,
     startBusy: startBusy, endBusy: endBusy, fail: fail, cancel: cancel,
     dismissShock: dismissShock, deferCrisis: deferCrisis,
     busyHTML: busyHTML, resultHTML: resultHTML, errorHTML: errorHTML,

@@ -57,6 +57,8 @@
     pressAuto: true,
     /* 民间发言条数（8~14） */
     pressPosts: 12,
+    /* 自动拉取到的模型列表缓存：{"provider|baseUrl": {at, models:[id…]}} */
+    modelLists: {},
     /* 调试：把请求/响应打到控制台 */
     verbose: false
   };
@@ -201,6 +203,7 @@
     CFG.pressEvery = Math.round(clampN(CFG.pressEvery, 1, 12));
     CFG.pressPosts = Math.round(clampN(CFG.pressPosts, 8, 14));
     if (!CFG.promptOverrides || typeof CFG.promptOverrides !== 'object') CFG.promptOverrides = {};
+    if (!CFG.modelLists || typeof CFG.modelLists !== 'object') CFG.modelLists = {};
     if (['lite', 'standard', 'deep'].indexOf(CFG.contextLevel) < 0) CFG.contextLevel = 'standard';
     if (['documentary', 'news', 'novel'].indexOf(CFG.style) < 0) CFG.style = 'documentary';
     global.AICFG = CFG;
@@ -244,6 +247,40 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * 模型列表缓存（自动拉取用）
+   * 键 = 协议|接口地址：换服务商/换地址就自然读到另一份缓存
+   * ------------------------------------------------------------------ */
+  function modelKey() {
+    var base = String(CFG.baseUrl || '').trim().replace(/\/+$/, '');
+    return (CFG.provider || 'openai') + '|' + base;
+  }
+  function modelList() {
+    var e = CFG.modelLists ? CFG.modelLists[modelKey()] : null;
+    return (e && Array.isArray(e.models) && e.models.length) ? e : null;
+  }
+  function setModelList(models, at) {
+    var list = [];
+    (models || []).forEach(function (m) {
+      var id = String(m && m.id != null ? m.id : m || '').trim();
+      if (id && list.indexOf(id) < 0) list.push(id);
+    });
+    list = list.slice(0, 300);
+    if (!CFG.modelLists || typeof CFG.modelLists !== 'object') CFG.modelLists = {};
+    CFG.modelLists[modelKey()] = { at: at || nowText(), models: list };
+    /* 只保留最近 20 组，避免 localStorage 无限膨胀 */
+    var keys = Object.keys(CFG.modelLists);
+    if (keys.length > 20) {
+      keys.sort(function (a, b) {
+        return String(CFG.modelLists[a].at || '').localeCompare(String(CFG.modelLists[b].at || ''));
+      });
+      for (var i = 0; i < keys.length - 20; i++) delete CFG.modelLists[keys[i]];
+    }
+    save();
+    return CFG.modelLists[modelKey()];
+  }
+  function clearModelLists() { CFG.modelLists = {}; save(); }
+
+  /* ------------------------------------------------------------------ *
    * 请求历史（只存摘要，便于复盘 AI 判得对不对）
    * ------------------------------------------------------------------ */
   var HIST = [];
@@ -282,6 +319,8 @@
     isPresident: isPresident, inCampaign: inCampaign, gameReady: gameReady,
     load: load, save: save, set: set, reset: reset,
     providerPreset: providerPreset, usePreset: usePreset,
+    modelKey: modelKey, modelList: modelList,
+    setModelList: setModelList, clearModelLists: clearModelLists,
     loadHistory: loadHistory, pushHistory: pushHistory,
     history: history, clearHistory: clearHistory
   };

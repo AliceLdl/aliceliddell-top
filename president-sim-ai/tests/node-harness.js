@@ -324,6 +324,76 @@ t('请求体 / 端点按协议生成', () => {
   return { info: 'openai / anthropic / gemini 均正确' };
 });
 
+/* 4b. 模型列表 */
+console.log('\n[4b] 模型列表（自动拉取）');
+t('三种协议的模型端点', () => {
+  A.set({ provider: 'openai', baseUrl: 'https://api.example.com/v1', apiKey: 'k' });
+  if (CLI.modelsEndpoint() !== 'https://api.example.com/v1/models') {
+    throw new Error('openai 端点 ' + CLI.modelsEndpoint());
+  }
+  A.set({ provider: 'anthropic', baseUrl: 'https://api.anthropic.com' });
+  if (CLI.modelsEndpoint() !== 'https://api.anthropic.com/v1/models?limit=200') {
+    throw new Error('anthropic 端点 ' + CLI.modelsEndpoint());
+  }
+  A.set({ provider: 'gemini', baseUrl: 'https://g.example.com/v1beta', apiKey: 'k' });
+  const g = CLI.modelsEndpoint();
+  if (!/\/v1beta\/models\?key=k&pageSize=200$/.test(g)) throw new Error('gemini 端点 ' + g);
+  return { info: 'openai / anthropic / gemini 均正确' };
+});
+t('不同返回形状都能解析、去重、聊天模型排前', () => {
+  const openai = CLI.parseModels({ data: [{ id: 'gpt-4o' }, { id: 'text-embedding-3' }, { id: 'gpt-4o' }] }, 'openai');
+  if (openai.length !== 2) throw new Error('去重失败：' + openai.length);
+  if (openai[0].id !== 'gpt-4o') throw new Error('聊天模型没排前面：' + openai.map(x => x.id).join(','));
+  const anth = CLI.parseModels({ data: [{ id: 'claude-x', display_name: 'Claude X' }] }, 'anthropic');
+  if (anth[0].name !== 'Claude X') throw new Error('display_name 未取到');
+  const gem = CLI.parseModels({ models: [
+    { name: 'models/gemini-2.0-flash', displayName: 'Gemini 2.0', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+    { name: 'models/gemini-1.5-pro', supportedGenerationMethods: ['generateContent', 'countTokens'] }
+  ] }, 'gemini');
+  if (gem.length !== 2) throw new Error('gemini 过滤失败：' + gem.map(x => x.id).join(','));
+  if (gem.some(x => /^models\//.test(x.id))) throw new Error('models/ 前缀没去掉');
+  const gemIds = gem.map(x => x.id);
+  if (gemIds.indexOf('gemini-2.0-flash') < 0 || gemIds.indexOf('gemini-1.5-pro') < 0) {
+    throw new Error('gemini 模型缺失：' + gemIds.join(','));
+  }
+  const arr = CLI.parseModels(['a', 'b'], 'custom');
+  if (arr.length !== 2) throw new Error('字符串数组未支持');
+  return { info: 'openai ' + openai.length + ' / anthropic ' + anth.length + ' / gemini ' + gem.length };
+});
+t('模型列表缓存按协议+地址分区', () => {
+  A.clearModelLists();
+  A.set({ provider: 'openai', baseUrl: 'https://api.example.com/v1', apiKey: 'k' });
+  A.setModelList(['m1', 'm2'], '2004-01-01 10:00:00');
+  const l1 = A.modelList();
+  if (!l1 || l1.models.length !== 2) throw new Error('缓存未写入');
+  A.set({ baseUrl: 'https://other.example.com/v1' });
+  if (A.modelList() !== null) throw new Error('换地址后读到了旧缓存');
+  A.setModelList(['x'], '2004-01-02 10:00:00');
+  A.set({ baseUrl: 'https://api.example.com/v1' });
+  const back = A.modelList();
+  if (!back || back.models[0] !== 'm1') throw new Error('切回原地址读不到缓存');
+  A.clearModelLists();
+  if (A.modelList() !== null) throw new Error('清空失败');
+  return { info: '分区与清空均正常' };
+});
+t('设置面板有拉取按钮、候选与缓存状态', () => {
+  A.set({ provider: 'openai', baseUrl: 'https://api.example.com/v1', model: 'm2' });
+  AIUI.state.tab = 'api';
+  let html = AIUI.settingsHTML();
+  if (html.indexOf('AIUI.fetchModels(true)') < 0) throw new Error('缺「拉取列表」按钮');
+  if (html.indexOf('datalist id="ai-model-list"') < 0) throw new Error('缺 datalist');
+  A.setModelList(['m1', 'm2'], '2004-01-01 10:00:00');
+  html = AIUI.settingsHTML();
+  if (html.indexOf('<option value="m1">') < 0) throw new Error('缓存模型没进候选');
+  if (html.indexOf('AIUI.setModelByIdx(1)') < 0) throw new Error('缺一键选择芯片');
+  if (html.indexOf('已缓存 2 个模型') < 0) throw new Error('缺缓存状态提示');
+  AIUI.setModelByIdx(0);
+  if (W.AICFG.model !== 'm1') throw new Error('点芯片没切换模型：' + W.AICFG.model);
+  A.clearModelLists();
+  return { info: '按钮 / datalist / 芯片 / 状态齐全' };
+});
+
 /* 5. 校验与限幅 */
 console.log('\n[5] 归一化与限幅');
 t('越界值被夹到上限', () => {

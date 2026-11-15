@@ -57,6 +57,8 @@
    | Gemini | `https://generativelanguage.googleapis.com/v1beta` | `gemini-2.0-flash` |
 
    点「服务商预设」里的按钮会自动填好地址和模型；再粘 API Key，点 **测试连接**。
+模型名可以直接手输，也可以点右边的 **拉取列表**——它会向接口的 `/models` 拉一次，
+把可用模型做成候选与一排芯片，点一下就能切换（第一次打开设置或测试连接成功时会自动拉）。
 
 3. 回到游戏，在「白宫战情室」里写一句话，例如：
 
@@ -338,7 +340,8 @@ AI 只负责**产出数字**，数字怎么进游戏完全走原版管线：
 
 「AI 设置」四个页签：
 
-**接口**：服务商预设、协议（OpenAI 兼容 / Anthropic / Gemini / 自定义）、模型、base URL、Key、
+**接口**：服务商预设、协议（OpenAI 兼容 / Anthropic / Gemini / 自定义）、模型（手输 + **拉取列表** +
+候选芯片）、base URL、Key、
 温度、最大输出 token、超时、测试连接。
 
 **提示词**：系统提示词与六个任务模板逐段编辑、恢复默认、预览完整请求（含 token 估算）。
@@ -424,9 +427,9 @@ president-sim-ai/
 │   ├── proxy.js               # 可选的本地代理（零依赖）
 │   └── proxy.config.example.json
 ├── tests/
-│   ├── node-harness.js        # 55 项：假引擎下的模块级集成测试
+│   ├── node-harness.js        # 59 项：假引擎下的模块级集成测试
 │   ├── contract.js            # 约 50 项：与原版引擎的符号/字段契约核对
-│   ├── dom-e2e.js             # 80 项：jsdom 里跑完整游戏 + AI 全链路 + 真实 HTTP
+│   ├── dom-e2e.js             # 85 项：jsdom 里跑完整游戏 + AI 全链路 + 真实 HTTP
 │   └── sample-context.js      # 打印一段真实上下文（做文档用）
 └── README.md
 ```
@@ -440,7 +443,7 @@ president-sim-ai/
 ```powershell
 cd aliceliddell-top-site\president-sim-ai
 
-# 1) 模块级：假引擎 + 55 项断言（不需要浏览器）
+# 1) 模块级：假引擎 + 59 项断言（不需要浏览器）
 node tests/node-harness.js
 
 # 2) 契约：确认扩展层用到的每个引擎符号都真实存在，并核对版本号三处一致
@@ -495,7 +498,7 @@ node tests/dom-e2e.js
 ## 版本
 
 - 原版引擎：`v0.2.2`（`aliceliddell-top-site/president-sim/index.html`，未改动）
-- AI 扩展层：`v0.3.4`（媒体改成单家整版 + 下拉切换，每家六个板块）
+- AI 扩展层：`v0.3.5`（接口页支持自动拉取模型列表并在本机缓存）
 - 需要浏览器支持 `fetch` / `Promise` / `AbortController`（Chrome / Edge 近五年版本均可）
 
 > **改版本号要同时改三处**：`index.html` 的 `<title>`、脚本里的 `const APP_VERSION`（顶栏与开局页页脚显示的就是它）、

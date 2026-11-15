@@ -378,7 +378,16 @@ async function waitFor(fn, timeoutMs, stepMs) {
   console.log('\n[12] 真实 HTTP 请求（本地假 OpenAI 服务）');
   const http = require('http');
   let captured = null;
+  let modelsHit = null;
   const mock = http.createServer((req, res) => {
+    if (req.method === 'GET' && /\/models/.test(req.url || '')) {
+      modelsHit = { url: req.url, headers: req.headers };
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ object: 'list', data: [
+        { id: 'mock-model' }, { id: 'mock-model-2' }, { id: 'text-embedding-3' }
+      ] }));
+      return;
+    }
     const chunks = [];
     req.on('data', c => chunks.push(c));
     req.on('end', () => {
@@ -458,6 +467,36 @@ async function waitFor(fn, timeoutMs, stepMs) {
   ok('HTTP 响应里的数值被应用', httpDone && G.pres.appr > apprBefore2, '');
   ok('token 用量被累计', W.AI.STAT.tokensIn > 0 && W.AI.STAT.tokensOut > 0,
     'in=' + W.AI.STAT.tokensIn + ' out=' + W.AI.STAT.tokensOut);
+
+  /* 12b. 模型列表自动拉取 */
+  console.log('\n[12b] 模型列表自动拉取');
+  W.AIUI.close();
+  await wait(60);
+  W.AIUI.open();                       /* 打开设置：应自动拉一次 */
+  const autoPulled = await waitFor(() => W.AI.modelList(), 8000);
+  ok('打开设置时自动拉取模型列表', autoPulled,
+    autoPulled ? ('缓存 ' + W.AI.modelList().models.length + ' 个') : '超时');
+  ok('请求打到了 /v1/models 且带 Bearer',
+    modelsHit && /\/v1\/models$/.test(modelsHit.url) &&
+    /^Bearer sk-mock/.test(modelsHit.headers.authorization || ''),
+    modelsHit ? (modelsHit.url + ' · ' + modelsHit.headers.authorization) : '无请求');
+  await wait(80);
+  ok('设置面板渲染出候选与芯片',
+    appHTML().indexOf('datalist id="ai-model-list"') >= 0 &&
+    appHTML().indexOf('<option value="mock-model-2">') >= 0 &&
+    appHTML().indexOf('AIUI.setModelByIdx(1)') >= 0 &&
+    appHTML().indexOf('已缓存 3 个模型') >= 0, '');
+  ok('拉取后模型芯片可一键切换', (function () {
+    W.AIUI.setModelByIdx(1);
+    return W.AICFG.model === 'mock-model-2';
+  })(), '当前模型=' + W.AICFG.model);
+  W.AIUI.fetchModels(true);
+  const refreshed = await waitFor(() => !W.AIUI.state.modelsLoading, 8000);
+  ok('手动「拉取列表」可刷新且不报错', refreshed && !W.AIUI.state.modelsErr,
+    '错误=' + (W.AIUI.state.modelsErr || '无'));
+  W.AIUI.close();
+  await wait(40);
+
   mock.close();
   W.fetch = function () { return Promise.reject(new Error('测试环境不联网')); };
 
