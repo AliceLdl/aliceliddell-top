@@ -1,0 +1,8 @@
+{
+  "_说明": "复制本文件为 proxy.config.json 再改值；也可以用环境变量 AI_PORT / AI_UPSTREAM / AI_API_KEY 覆盖。",
+  "port": 8787,
+  "upstream": "https://api.deepseek.com/v1",
+  "apiKey": "",
+  "allowOrigin": "*",
+  "extraHeaders": {}
+}
