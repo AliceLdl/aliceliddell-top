@@ -268,7 +268,7 @@ t('竞选模式带民调与竞选数值', () => {
 console.log('\n[3] 提示词');
 t('系统提示词覆盖关键规则', () => {
   const s = PROMPT.system();
-  const must = ['裁决引擎', '数值字段', 'success', '幅度基准', '只输出一个 JSON 对象', 'relations', 'sectors', '叙事账本'];
+  const must = ['裁决引擎', '数值字段', 'success', 'visibility', '行动公开性', '幅度基准', '只输出一个 JSON 对象', 'relations', 'sectors', '叙事账本'];
   const miss = must.filter(m => s.indexOf(m) < 0);
   if (miss.length) throw new Error('缺少 ' + miss.join(','));
   if (s.indexOf('执行结果档位') < 0) throw new Error('缺执行结果档位一节');
@@ -508,6 +508,41 @@ t('上帝模式只接受「成功 / 大成功」', () => {
   const back = ADJ.normalize({ success: 'partial', apCost: 1, effects: { approval: 2 } }, 'national');
   if (!back.ok) throw new Error('关掉上帝模式后 partial 应恢复合法');
   return { info: 'none/fail/partial 作废；success/triumph 通过' };
+});
+t('公开性：密谈不涨民意，但交易与关系照旧', () => {
+  A.set({ variance: false });
+  const base = { success: 'success', apCost: 1,
+    effects: { approval: 4, confidence: 4, stock: 4, division: 2, tension: 6, politicalCapital: 2 },
+    relations: { CN: 8 }, sectors: { energy: 4 } };
+  const mk = (v) => ADJ.gate(ADJ.normalize(Object.assign({ visibility: v }, base), 'national'));
+  const secret = mk('secret'), priv = mk('private'), open = mk('open'), loud = mk('loud');
+  const near = (a, b) => Math.abs(a - b) < 1e-6;
+  if (!near(secret.fx.appr, 0.6) || !near(priv.fx.appr, 1.8) || !near(open.fx.appr, 4) || !near(loud.fx.appr, 5)) {
+    throw new Error('民意系数错：' + [secret.fx.appr, priv.fx.appr, open.fx.appr, loud.fx.appr].join(','));
+  }
+  if (!near(secret.fx.tension, 3.6)) throw new Error('secret tension 应 ×0.6：' + secret.fx.tension);
+  if (secret.fx.pc !== 2 || secret.rel.CN !== 8 || secret.corp.energy !== 4) {
+    throw new Error('精英通道不该被公开度打折：pc=' + secret.fx.pc + ' rel=' + secret.rel.CN +
+      ' corp=' + secret.corp.energy);
+  }
+  if (secret.visibilityCN !== '密谈' || open.visibilityCN !== '公开') throw new Error('中文档名错');
+  if (ADJ.parseVisibility({}) !== 'open' || ADJ.parseVisibility({ visibility: 'bogus' }) !== 'open') {
+    throw new Error('缺失/非法公开性应回落 open');
+  }
+  if (ADJ.parseVisibility({ visibility: '未公开' }) !== 'secret') throw new Error('中文别名未识别');
+  A.set({ variance: true });
+  return { info: 'appr secret/private/open/loud = 0.6/1.8/4/5；关系与政治资本不折' };
+});
+t('未公开的行动不会写进舆论提示词', () => {
+  PRESS.reset();
+  PRESS.ensure();
+  G.aiLog = [{ headline: '闭门交易', visibility: 'secret', visibilityCN: '密谈' }];
+  const req = PRESS.buildFeedRequest();
+  if (req.user.indexOf('尚未公开的行动') < 0) throw new Error('缺少【尚未公开的行动】提示');
+  if (req.user.indexOf('闭门交易') < 0) throw new Error('未公开行动没有被列出');
+  if (req.user.indexOf('媒体不要写进版面') < 0) throw new Error('缺少“不要报道”的约束');
+  G.aiLog = [];
+  return { info: '提示词含【尚未公开的行动】+ 不得报道约束' };
 });
 t('上帝模式只改提示词，行动点照常扣', () => {
   A.set({ godMode: true });

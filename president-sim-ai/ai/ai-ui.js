@@ -93,6 +93,8 @@
     '.ai-grade.g2{color:#d99b2b;border-color:#d99b2b66}',
     '.ai-grade.g3{color:#3fa66a;border-color:#3fa66a66}',
     '.ai-grade.g4{color:#1f9fd9;border-color:#1f9fd966}',
+    '.ai-vis{display:inline-block;font-size:11px;padding:1px 7px;border-radius:20px;',
+    '  margin-right:6px;border:1px solid var(--line2);background:transparent;vertical-align:1px}',
     '.ai-busy{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12.5px;color:var(--dim)}',
     '.ai-spin{width:13px;height:13px;border:2px solid var(--line2);border-top-color:var(--accent);',
     '  border-radius:50%;animation:aipin .9s linear infinite;display:inline-block}',
@@ -170,7 +172,12 @@
     var cls = r.ok ? '' : ' bad';
     var gcls = 'g' + (r.grade == null ? 3 : Math.max(0, Math.min(4, r.grade)));
     var grade = r.gradeCN ? '<span class="ai-grade ' + gcls + '">' + esc(r.gradeCN) + '</span>' : '';
-    var head = r.ok ? (grade + '【' + esc(r.headline) + '】') : (grade || '✕ 指令未执行');
+    var visCol = ({ secret: '#8b96a5', private: '#876ac6', open: '#3fa66a', loud: '#e08a1e' })[r.visibility] || '#8b96a5';
+    var vis = r.visibilityCN
+      ? '<span class="ai-vis" title="行动公开度决定民意类效果要不要打折" style="border-color:' +
+        visCol + '66;color:' + visCol + '">' + esc(r.visibilityCN) + '</span>'
+      : '';
+    var head = r.ok ? (grade + vis + '【' + esc(r.headline) + '】') : (grade || '✕ 指令未执行');
     var src = (r.source === 'offline' ? '本地规则' : 'AI');
     var meta = src + ' · ' + (cfg().model || '') +
       (r.apCost ? ' · ' + r.apCost + ' 行动点' : '') +

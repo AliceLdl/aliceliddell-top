@@ -53,6 +53,53 @@
 
   function gradeOf(id) { return GRADE_BY_ID[id] || GRADE_BY_ID.success; }
 
+  /* ------------------------------------------------------------------ *
+   * 行动公开性 visibility
+   *   密谈 / 内部 / 公开 / 高调 四档，只决定「民意类」效果要不要打折：
+   *   私下谈成的交易照样改变关系与政治资本，但不会当天上头条。
+   *   pub     → approval / confidence / stock / 社会撕裂 的系数
+   *   tension → 全球紧张度（走漏之前只有情报圈知道，所以略打折）
+   * ------------------------------------------------------------------ */
+  var VIS = [
+    { id: 'secret',  cn: '密谈', pub: 0.15, tension: 0.60,
+      tags: ['secret', 'covert', 'hidden', 'quiet', '密谈', '秘密', '私下', '未公开', '不公开', '暗中'] },
+    { id: 'private', cn: '内部', pub: 0.45, tension: 0.80,
+      tags: ['private', 'internal', 'closed', '内部', '闭门', '半公开', '小范围', '仅通知'] },
+    { id: 'open',    cn: '公开', pub: 1.00, tension: 1.00,
+      tags: ['open', 'public', 'normal', '公开', '常规', '正常', '例行'] },
+    { id: 'loud',    cn: '高调', pub: 1.25, tension: 1.10,
+      tags: ['loud', 'high', 'broadcast', 'nationwide', '高调', '大张旗鼓', '全国直播', '公开宣讲'] }
+  ];
+  var VIS_BY_ID = {};
+  VIS.forEach(function (v) { VIS_BY_ID[v.id] = v; });
+  function visOf(id) { return VIS_BY_ID[id] || VIS_BY_ID.open; }
+
+  /* 没给 / 给了不认识的值 → 按「公开」处理（公开性只是补充信息，不该让整份结果作废） */
+  function parseVisibility(raw) {
+    if (!raw || typeof raw !== 'object') return 'open';
+    var v = raw.visibility;
+    if (v == null) v = raw['公开性'];
+    if (v == null) v = raw.visibilityLevel;
+    if (v == null) v = raw.publicity;
+    if (v == null) return 'open';
+    if (typeof v === 'number') {
+      var i = Math.round(Math.max(0, Math.min(VIS.length - 1, v)));
+      return VIS[i].id;
+    }
+    if (typeof v === 'boolean') return v ? 'open' : 'secret';
+    var s = String(v).trim().toLowerCase().replace(/[\s_\-]+/g, '');
+    if (!s) return 'open';
+    for (var k = 0; k < VIS.length; k++) {
+      for (var j = 0; j < VIS[k].tags.length; j++) {
+        if (s === String(VIS[k].tags[j]).toLowerCase().replace(/[\s_\-]+/g, '')) return VIS[k].id;
+      }
+    }
+    if (/秘密|私下|暗中|secret|covert|hidden|quiet/.test(s)) return 'secret';
+    if (/内部|闭门|小范围|internal|closed|private/.test(s)) return 'private';
+    if (/高调|大张旗鼓|全国直播|loud|nationwide|broadcast/.test(s)) return 'loud';
+    return 'open';
+  }
+
   var CN = {
     appr: '支持率', gdp: '经济增长', unemp: '失业率', infl: '通胀', conf: '信心',
     sp: '股市', deficit: '赤字', debt: '债务', tension: '全球紧张度', div: '社会撕裂',
@@ -200,6 +247,10 @@
     out.grade = grade.idx;
     out.gradeCN = grade.cn;
     out.ok = grade.ok;
+
+    var vis = visOf(parseVisibility(raw));
+    out.visibility = vis.id;
+    out.visibilityCN = vis.cn;
 
     out.headline = cleanText(raw.headline, 40);
     out.narrative = cleanText(raw.narrative, 700);
@@ -390,6 +441,20 @@
       norm.stumble = (g.id === 'fail');
     }
 
+    /* 2.5) 公开度：只有「民意类」通道随公开度打折/放大。
+       密谈能谈成事（关系、行业、政治资本照旧），但不会当天上头条。 */
+    var visNow = visOf(norm.visibility);
+    norm.visibility = visNow.id;
+    norm.visibilityCN = visNow.cn;
+    if (visNow.pub !== 1 || visNow.tension !== 1) {
+      ['appr', 'conf', 'sp'].forEach(function (fk) {
+        if (norm.fx[fk]) norm.fx[fk] *= visNow.pub;
+      });
+      if (norm.fx.tension) norm.fx.tension *= visNow.tension;
+      norm.div *= visNow.pub;
+      norm.notes.push('公开度：' + visNow.cn + '（民意类效果 ×' + visNow.pub + '）');
+    }
+
     /* 3) 总量预算 */
     var w = 0;
     w += Math.abs(norm.fx.appr || 0) / CAP.appr;
@@ -491,6 +556,8 @@
       success: norm ? (norm.success || 'success') : 'none',
       grade: norm ? (norm.grade == null ? 3 : norm.grade) : 0,
       gradeCN: norm ? (norm.gradeCN || '成功') : '未执行',
+      visibility: norm ? (norm.visibility || 'open') : 'open',
+      visibilityCN: norm ? (norm.visibilityCN || '公开') : '公开',
       narrative: norm ? norm.narrative : '', apCost: norm ? norm.apCost : 0,
       risk: norm ? norm.risk : 'low', tone: norm ? norm.tone : '',
       followup: norm ? norm.followup : '', rejectReason: norm ? norm.rejectReason : '',
@@ -621,6 +688,7 @@
         y: g.y, w: g.w, mode: mode, input: String(meta.input || '').slice(0, 200),
         headline: norm.headline, narrative: norm.narrative, apCost: ap,
         ok: true, success: norm.success, gradeCN: norm.gradeCN,
+        visibility: norm.visibility, visibilityCN: norm.visibilityCN,
         source: summary.source, provider: (cfg().provider || ''),
         model: (cfg().model || ''), at: global.AI.nowText(),
         chips: summary.chips
@@ -773,6 +841,9 @@
     GRADES: GRADES,
     gradeOf: gradeOf,
     parseGrade: parseGrade,
+    VIS: VIS,
+    visOf: visOf,
+    parseVisibility: parseVisibility,
     normalize: normalize,
     gate: gate,
     apply: apply,

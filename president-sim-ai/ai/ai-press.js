@@ -255,7 +255,16 @@
       activeBill: g && g.activeBill ? { cn: g.activeBill.cn, pop: g.activeBill.pop } : null,
       pendingEvents: g && g.pendingEvents ? g.pendingEvents.slice(0, 2).map(function (p) { return p.ev && p.ev.cn; }) : [],
       crises: g && g.crises ? g.crises.slice(0, 3).map(function (c) { return c.cn; }) : [],
-      approval: g && g.pres ? Math.round(g.pres.appr) : 50
+      approval: g && g.pres ? Math.round(g.pres.appr) : 50,
+      /* 未公开的行动：媒体与网民不该知道它们的存在 */
+      privateActions: (function () {
+        var log = (g && g.aiLog) || [];
+        return log.slice(-5).filter(function (x) {
+          return x && (x.visibility === 'secret' || x.visibility === 'private');
+        }).map(function (x) {
+          return '《' + x.headline + '》（' + (x.visibilityCN || '未公开') + '）';
+        });
+      })()
     };
   }
 
@@ -279,6 +288,12 @@
     }
     if (p.pendingEvents.length) lines.push('【待处理的突发事件】' + p.pendingEvents.filter(Boolean).join('、'));
     if (p.crises.length) lines.push('【国际焦点】' + p.crises.join('、'));
+    if (p.privateActions && p.privateActions.length) {
+      lines.push('');
+      lines.push('【尚未公开的行动】' + p.privateActions.join('、'));
+      lines.push('· 这些事没有被公开报道：媒体不要写进版面，民间顶多出现「据说」「传闻」式的猜测；' +
+                 '除非有人明确泄露，否则不要披露内容与参与者。');
+    }
     return lines;
   }
 

@@ -357,6 +357,29 @@ async function waitFor(fn, timeoutMs, stepMs) {
     String(W.AIUI.state.error || '').slice(0, 60) + ' / AP ' + apBeforeGod + '→' + G.ap);
   ok('上帝模式默认开启状态生效于系统提示词', /只接受|只能/.test(W.AIPROMPT.GOD), '字数 ' + W.AIPROMPT.GOD.length);
   W.AIUI.setGodMode(false);
+
+  /* 公开性：密谈不涨民意，结果卡标出「密谈」，舆论不得报道 */
+  const apprBeforeVis = G.pres.appr;
+  W.AICLIENT.chat = function () {
+    return Promise.resolve({
+      text: JSON.stringify({ success: 'success', visibility: 'secret', headline: '闭门交易',
+        narrative: '你在书房与两位议员谈成一笔交换，没有对外公布。',
+        apCost: 1, risk: 'low', tone: '交易', effects: { approval: 4, politicalCapital: 2 } }),
+      usage: { input: 120, output: 40 }, ms: 8, totalMs: 8, model: 'stub', endpoint: 'stub', attempts: 1
+    });
+  };
+  W.AIUI.setDraft('national', '闭门谈一笔交易');
+  W.AIUI.submit('national');
+  const visDone = await waitFor(() => W.AIUI.state.result && W.AIUI.state.result.visibility === 'secret', 8000);
+  ok('结果卡标出公开度「密谈」', visDone && appHTML().indexOf('密谈') >= 0,
+    'visibility=' + ((W.AIUI.state.result || {}).visibility));
+  ok('密谈的民意效果被压到 15%', visDone && (G.pres.appr - apprBeforeVis) < 1.2,
+    apprBeforeVis.toFixed(1) + ' → ' + G.pres.appr.toFixed(1) + '（模型给的是 +4）');
+  ok('未公开行动进了舆论禁报清单', (function () {
+    const req = W.AIPRESS.buildFeedRequest();
+    return req.user.indexOf('尚未公开的行动') >= 0 && req.user.indexOf('闭门交易') >= 0;
+  })(), '提示词含禁报约束');
+
   await wait(60);
   W.AIUI.open();
   W.AIUI.openHistory();

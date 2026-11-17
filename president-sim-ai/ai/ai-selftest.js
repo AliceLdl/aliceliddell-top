@@ -74,6 +74,25 @@
         info: '缺档位作废=' + badMissing + ' / 上帝模式拒 partial 认 success=' + badGod };
     });
 
+    check('公开性（密谈不涨民意）', function () {
+      var s = global.AIPROMPT.system();
+      var must = ['visibility', '行动公开性', '密谈', '高调'];
+      var miss = must.filter(function (m) { return s.indexOf(m) < 0; });
+      var ADJ = global.AIADJ;
+      var c = global.AICFG, v0 = c.variance;
+      c.variance = false;
+      var sec = ADJ.gate(ADJ.normalize({ success: 'success', visibility: 'secret', apCost: 1,
+        effects: { approval: 4, politicalCapital: 2 }, relations: { CN: 6 } }, 'national'));
+      var opn = ADJ.gate(ADJ.normalize({ success: 'success', visibility: 'open', apCost: 1,
+        effects: { approval: 4, politicalCapital: 2 }, relations: { CN: 6 } }, 'national'));
+      c.variance = v0;
+      var okVis = Math.abs(sec.fx.appr - 0.6) < 1e-6 && opn.fx.appr === 4 &&
+                  sec.fx.pc === 2 && sec.rel.CN === 6;
+      return { ok: !miss.length && okVis,
+        info: '提示词缺：' + (miss.join(',') || '无') + '；密谈 appr=' + sec.fx.appr +
+              '（公开 ' + opn.fx.appr + '），pc/rel 不折=' + (sec.fx.pc === 2 && sec.rel.CN === 6) };
+    });
+
     check('五种模式的提示词组装', function () {
       var modes = ['national', 'campaign', 'event', 'shock', 'crisis'];
       var info = [];
